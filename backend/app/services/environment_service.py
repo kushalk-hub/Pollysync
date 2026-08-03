@@ -31,6 +31,9 @@ from typing import Optional
 
 import httpx
 
+from app.core.cache import cache_get, cache_set
+from app.core.circuit_breaker import circuit_breaker
+
 # --------------------------------------------------------------------------
 # 1. WEATHER (NASA POWER) -> temp_7d_mean, humidity, rainfall_7d, wind_speed
 # --------------------------------------------------------------------------
@@ -78,6 +81,12 @@ async def fetch_nasa_power_7d(lat: float, lon: float, as_of: date) -> dict:
     }
 
 
+@circuit_breaker("nasa-power", max_failures=3, window_seconds=300)
+async def fetch_nasa_power_7d_protected(lat: float, lon: float, as_of: date) -> dict:
+    """Fetch NASA POWER data with circuit breaker protection."""
+    return await fetch_nasa_power_7d(lat, lon, as_of)
+
+
 # --------------------------------------------------------------------------
 # 2. NDVI (Google Earth Engine, Sentinel-2) -> ndvi
 # --------------------------------------------------------------------------
@@ -90,9 +99,10 @@ def _init_earth_engine():
     if _ee_initialized:
         return
     import ee  # imported lazily so the rest of the module works without it installed
+    from app.core.config import settings
 
-    service_account = os.getenv("EE_SERVICE_ACCOUNT")
-    key_file = os.getenv("EE_PRIVATE_KEY_FILE")
+    service_account = settings.ee_service_account
+    key_file = settings.ee_private_key_file
     if service_account and key_file:
         credentials = ee.ServiceAccountCredentials(service_account, key_file)
         ee.Initialize(credentials)
@@ -136,6 +146,12 @@ async def fetch_ndvi(lat: float, lon: float, as_of: date, window_days: int = 20)
         return round(result, 4) if result is not None else None
 
     return await anyio.to_thread.run_sync(_query)
+
+
+@circuit_breaker("earth-engine", max_failures=3, window_seconds=300)
+async def fetch_ndvi_protected(lat: float, lon: float, as_of: date, window_days: int = 20) -> Optional[float]:
+    """Fetch NDVI with circuit breaker protection."""
+    return await fetch_ndvi(lat, lon, as_of, window_days)
 
 
 # --------------------------------------------------------------------------
@@ -194,6 +210,12 @@ async def get_environment_features(
     script that loops over real district coordinates + dates to build a
     *real* flowering_data.csv (replacing generate_data.py's synthetic data)."""
     as_of = as_of or date.today()
+    
+    # Check cache first
+    cache_key = f"{lat},{lon},{crop_type},{as_of}"
+    cached = cache_get(cache_key, group="environment")
+    if cached:
+        return cached
 
     weather = await fetch_nasa_power_7d(lat, lon, as_of)
     try:
@@ -204,7 +226,7 @@ async def get_environment_features(
     pollen = get_pollen_for_month(as_of.month)
 
     crop = crop_type.lower()
-    return {
+    result = {
         "temp_7d_mean": weather["temp_7d_mean"],
         "humidity": weather["humidity"],
         "rainfall_7d": weather["rainfall_7d"],
@@ -223,3 +245,46 @@ async def get_environment_features(
         "_t_max_7d": weather["t_max_7d"],
         "_t_min_7d": weather["t_min_7d"],
     }
+    
+    # Cache the result
+    cache_set(cache_key, result, ttl=900, group="environment")
+    
+    return result
+
+
+async def get_ndvi_with_cache(lat: float, lon: float, as_of: Optional[date] = None) -> Optional[float]:
+    """Get NDVI with L1/L2 cache layer."""
+    as_of = as_of or date.today()
+    cache_key = f"ndvi,{lat},{lon},{as_of}"
+    
+    # L1/L2 cache check
+    cached = cache_get(cache_key, group="ndvi")
+    if cached is not None:
+        return cached
+    
+    # Live fetch
+    try:
+        ndvi = await fetch_ndvi(lat, lon, as_of)
+        if ndvi is not None:
+            cache_set(cache_key, ndvi, ttl=900, group="ndvi")
+        return ndvi
+    except Exception:
+        return None
+
+
+async def get_bee_richness_with_cache(lat: float, lon: float, radius_km: float = 25) -> int:
+    """Get bee richness with L1/L2 cache layer."""
+    cache_key = f"bee_richness,{lat},{lon},{radius_km}"
+    
+    # L1/L2 cache check
+    cached = cache_get(cache_key, group="bee_richness")
+    if cached is not None:
+        return cached
+    
+    # Live fetch
+    try:
+        richness = await fetch_bee_richness(lat, lon, radius_km)
+        cache_set(cache_key, richness, ttl=900, group="bee_richness")
+        return richness
+    except Exception:
+        return 0

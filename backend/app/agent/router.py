@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -26,6 +27,57 @@ _client: Client | None = None
 
 _RATE_LIMIT_WINDOW = 60
 _RATE_LIMIT_MAX = 20
+
+
+async def assemble_farm_context(farm_id: str, db: Session) -> str:
+    """Assemble live farm data for agent context."""
+    from app.models.farm import Farm
+    from app.models.prediction import Prediction
+    from app.services.weather_service import get_weather_with_cache
+    from app.services.bee_service import get_bee_data_with_cache
+    
+    farm = db.query(Farm).filter(Farm.id == farm_id).first()
+    if not farm:
+        return ""
+    
+    # Get latest prediction
+    prediction = (
+        db.query(Prediction)
+        .filter(Prediction.farm_id == farm_id)
+        .order_by(Prediction.created_at.desc())
+        .first()
+    )
+    
+    # Get live weather
+    try:
+        weather = await get_weather_with_cache(str(farm.id), farm.latitude, farm.longitude, db)
+        weather_info = f"Temperature: {weather.get('current', {}).get('temperature_2m', 'N/A')}°C, Humidity: {weather.get('current', {}).get('relative_humidity_2m', 'N/A')}%"
+    except Exception:
+        weather_info = "Weather data unavailable"
+    
+    # Get bee data
+    try:
+        bee_data = await get_bee_data_with_cache(str(farm.id), farm.latitude, farm.longitude, db)
+        bee_info = f"Bee species richness: {bee_data.get('richness', 'N/A')}"
+    except Exception:
+        bee_info = "Bee data unavailable"
+    
+    # Get prediction info
+    if prediction:
+        pred_info = f"Risk level: {prediction.risk_level}, PSI: {prediction.psi_score}"
+    else:
+        pred_info = "No prediction available"
+    
+    context = f"""
+Live farm conditions:
+Crop: {farm.crop_type}
+District: {farm.location_name or 'Unknown'}
+
+Weather: {weather_info}
+Bee Data: {bee_info}
+Prediction: {pred_info}
+"""
+    return context
 
 
 def _check_rate_limit(identifier: str, db: Session) -> None:
@@ -143,6 +195,7 @@ async def chat(
     _check_rate_limit(current_user.id, db)
 
     farm_data: dict[str, Any] | None = payload.get("farm_data")
+    farm_id: str | None = payload.get("farm_id")
     messages: list[dict[str, str]] = payload.get("messages", [])
     if not messages:
         raise HTTPException(status_code=400, detail="No messages provided")
@@ -152,6 +205,15 @@ async def chat(
         msg["content"] = _sanitize_input(msg.get("content", ""))
 
     system_prompt = get_system_prompt()
+
+    # Add live farm context if farm_id is provided
+    if farm_id:
+        try:
+            live_context = await assemble_farm_context(farm_id, db)
+            if live_context:
+                system_prompt += f"\n\n{live_context}"
+        except Exception:
+            logger.warning("Failed to assemble farm context", exc_info=True)
 
     if farm_data:
         try:
@@ -205,3 +267,16 @@ async def search_knowledge(
         return {"results": results}
     except RuntimeError:
         raise HTTPException(status_code=503, detail="Knowledge search is temporarily unavailable.")
+
+
+@router.get("/context")
+async def get_agent_context(
+    farm_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Debug endpoint to see assembled agent context."""
+    _check_rate_limit(current_user.id, db)
+    context = await assemble_farm_context(farm_id, db)
+    return {"context": context}

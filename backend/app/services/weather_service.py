@@ -4,6 +4,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.weather_cache import WeatherCache
+from app.core.cache import cache_get, cache_set
+from app.core.circuit_breaker import circuit_breaker
 
 OPEN_METEO_URL = (
     "https://api.open-meteo.com/v1/forecast"
@@ -40,6 +42,12 @@ def get_fallback_weather(lat: float, lng: float) -> dict:
         "fallback": True,
         "source_location": {"lat": lat, "lng": lng},
     }
+
+
+@circuit_breaker("open-meteo", max_failures=3, window_seconds=300, fallback=get_fallback_weather)
+async def fetch_weather_protected(lat: float, lng: float) -> dict:
+    """Fetch weather with circuit breaker protection."""
+    return await fetch_weather(lat, lng)
 
 
 def get_cached_weather(farm_id: str, db: Session) -> WeatherCache | None:
@@ -80,3 +88,46 @@ def parse_forecast(raw: dict) -> list[dict]:
         {"date": d, "temp_max": t_max[i], "temp_min": t_min[i], "rainfall": rain[i]}
         for i, d in enumerate(dates)
     ]
+
+
+async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Session) -> dict:
+    """Get weather data with L1/L2 cache layer."""
+    cache_key = f"{lat},{lng}"
+    
+    # L1/L2 cache check
+    cached = cache_get(cache_key, group="weather")
+    if cached:
+        return cached
+    
+    # DB cache check
+    db_weather = get_cached_weather(farm_id, db)
+    if db_weather:
+        result = {
+            "current": {
+                "temperature_2m": db_weather.temperature,
+                "relative_humidity_2m": db_weather.humidity,
+                "precipitation": db_weather.rainfall,
+                "wind_speed_10m": db_weather.wind_speed,
+            },
+            "daily": {
+                "time": [],
+                "temperature_2m_max": [],
+                "temperature_2m_min": [],
+                "precipitation_sum": [],
+            },
+            "source": "db_cache",
+        }
+        cache_set(cache_key, result, ttl=900, group="weather")
+        return result
+    
+    # Live fetch
+    try:
+        live_weather = await fetch_weather(lat, lng)
+        live_weather["source"] = "live"
+        cache_set(cache_key, live_weather, ttl=900, group="weather")
+        return live_weather
+    except Exception:
+        # Fallback on error
+        fallback = get_fallback_weather(lat, lng)
+        fallback["source"] = "fallback"
+        return fallback
