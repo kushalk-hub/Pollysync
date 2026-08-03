@@ -5,13 +5,10 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# L1 in-memory cache: {key: {"value": ..., "expires_at": ...}}
 _l1_cache: dict = {}
-L1_DEFAULT_TTL = 300  # 5 minutes
+L1_DEFAULT_TTL = 300  
 
-# Lazy Redis client
 _redis_client = None
-
 
 def _get_redis():
     global _redis_client
@@ -61,13 +58,11 @@ def cache_set(key: str, value: Any, ttl: int = L1_DEFAULT_TTL, group: str = "def
     full_key = f"{group}:{key}"
     now = time.time()
 
-    # L1 set
     _l1_cache[full_key] = {
         "value": value,
         "expires_at": now + ttl,
     }
 
-    # L2 Redis set
     redis_client = _get_redis()
     if redis_client:
         try:
