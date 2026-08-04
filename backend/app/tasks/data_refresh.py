@@ -28,22 +28,31 @@ def refresh_weather_batch():
     db = SessionLocal()
     try:
         farms = db.query(Farm).all()
-        for farm in farms:
+
+        async def _one(f):
             try:
-                # Use sync wrapper for async fetch
-                loop = asyncio.new_event_loop()
-                weather_data = loop.run_until_complete(
-                    fetch_weather(farm.latitude, farm.longitude)
-                )
-                loop.close()
-                
-                # Cache in DB
-                cache_weather(str(farm.id), weather_data, db)
+                weather_data = await fetch_weather(f.location_lat, f.location_lng)
+                return f, weather_data
             except Exception as e:
-                logger.warning(f"Weather refresh failed for farm {farm.id}: {e}")
+                logger.warning(f"Weather refresh failed for farm {f.id}: {e}")
+                return f, None
+
+        async def _run_all():
+            return await asyncio.gather(*(_one(f) for f in farms))
+
+        loop = asyncio.new_event_loop()
+        try:
+            results = loop.run_until_complete(_run_all())
+        finally:
+            loop.close()
+
+        for f, weather_data in results:
+            if weather_data is None:
+                continue
+            cache_weather(str(f.id), weather_data, db)
     finally:
         db.close()
-    
+
     # Invalidate L1/L2 cache
     cache_delete_group("weather")
 
@@ -60,22 +69,32 @@ def refresh_ndvi_batch():
     db = SessionLocal()
     try:
         farms = db.query(Farm).all()
-        for farm in farms:
+
+        async def _one(f):
             try:
-                loop = asyncio.new_event_loop()
-                ndvi = loop.run_until_complete(
-                    fetch_ndvi(farm.latitude, farm.longitude, date.today())
-                )
-                loop.close()
-                
-                if ndvi is not None:
-                    cache_key = f"ndvi,{farm.latitude},{farm.longitude},{date.today()}"
-                    cache_set(cache_key, ndvi, ttl=900, group="ndvi")
+                ndvi = await fetch_ndvi(f.location_lat, f.location_lng, date.today())
+                return f, ndvi
             except Exception as e:
-                logger.warning(f"NDVI refresh failed for farm {farm.id}: {e}")
+                logger.warning(f"NDVI refresh failed for farm {f.id}: {e}")
+                return f, None
+
+        async def _run_all():
+            return await asyncio.gather(*(_one(f) for f in farms))
+
+        loop = asyncio.new_event_loop()
+        try:
+            results = loop.run_until_complete(_run_all())
+        finally:
+            loop.close()
+
+        for f, ndvi in results:
+            if ndvi is None:
+                continue
+            cache_key = f"ndvi,{f.location_lat},{f.location_lng},{date.today()}"
+            cache_set(cache_key, ndvi, ttl=900, group="ndvi")
     finally:
         db.close()
-    
+
     cache_delete_group("ndvi")
 
 
@@ -90,25 +109,36 @@ def refresh_bees_batch():
     db = SessionLocal()
     try:
         farms = db.query(Farm).all()
-        for farm in farms:
+
+        async def _one(f):
             try:
-                loop = asyncio.new_event_loop()
-                occurrences = loop.run_until_complete(
-                    fetch_bees(farm.latitude, farm.longitude)
-                )
-                loop.close()
-                
-                species = list({occ["species"] for occ in occurrences})
-                result = {
-                    "species": species,
-                    "richness": len(species),
-                    "source": "refresh",
-                }
-                cache_key = f"{farm.latitude},{farm.longitude}"
-                cache_set(cache_key, result, ttl=900, group="bees")
+                occurrences = await fetch_bees(f.location_lat, f.location_lng)
+                return f, occurrences
             except Exception as e:
-                logger.warning(f"Bee refresh failed for farm {farm.id}: {e}")
+                logger.warning(f"Bee refresh failed for farm {f.id}: {e}")
+                return f, None
+
+        async def _run_all():
+            return await asyncio.gather(*(_one(f) for f in farms))
+
+        loop = asyncio.new_event_loop()
+        try:
+            results = loop.run_until_complete(_run_all())
+        finally:
+            loop.close()
+
+        for f, occurrences in results:
+            if not occurrences:
+                continue
+            species = list({occ["species"] for occ in occurrences})
+            result = {
+                "species": species,
+                "richness": len(species),
+                "source": "refresh",
+            }
+            cache_key = f"{f.location_lat},{f.location_lng}"
+            cache_set(cache_key, result, ttl=900, group="bees")
     finally:
         db.close()
-    
+
     cache_delete_group("bees")
