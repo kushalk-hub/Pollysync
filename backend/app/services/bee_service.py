@@ -37,13 +37,13 @@ async def fetch_bees(lat: float, lng: float, radius_km: int = 10) -> list[dict]:
         results = data.get("results", [])
         return [
             {
-                "species": r.get("species", "Unknown"),
+                "species": r.get("species"),
                 "lat": r.get("decimalLatitude"),
                 "lng": r.get("decimalLongitude"),
                 "date": r.get("eventDate", ""),
             }
             for r in results
-            if r.get("decimalLatitude") and r.get("decimalLongitude")
+            if r.get("species") and r.get("decimalLatitude") and r.get("decimalLongitude")
         ]
 
 
@@ -59,13 +59,18 @@ def get_mock_bees(crop_type: str) -> list[str]:
 
 def store_bees(farm_id: str, occurrences: list[dict], db: Session) -> None:
     for occ in occurrences:
+        species = occ.get("species")
+        lat = occ.get("lat")
+        lng = occ.get("lng")
+        if not species or lat is None or lng is None:
+            continue
         existing = (
             db.query(BeeOccurrence)
             .filter(
                 BeeOccurrence.farm_id == farm_id,
-                BeeOccurrence.species_name == occ["species"],
-                BeeOccurrence.lat == occ["lat"],
-                BeeOccurrence.lng == occ["lng"],
+                BeeOccurrence.species_name == species,
+                BeeOccurrence.lat == lat,
+                BeeOccurrence.lng == lng,
             )
             .first()
         )
@@ -73,9 +78,9 @@ def store_bees(farm_id: str, occurrences: list[dict], db: Session) -> None:
             db.add(
                 BeeOccurrence(
                     farm_id=farm_id,
-                    species_name=occ["species"],
-                    lat=occ["lat"],
-                    lng=occ["lng"],
+                    species_name=species,
+                    lat=lat,
+                    lng=lng,
                     observation_date=occ.get("date", ""),
                 )
             )
@@ -114,7 +119,7 @@ async def get_bee_data_with_cache(farm_id: str, lat: float, lng: float, db: Sess
     
     # Live fetch
     try:
-        occurrences = await fetch_bees(lat, lng)
+        occurrences = await fetch_bees_protected(lat, lng)
         species = list({occ["species"] for occ in occurrences})
         result = {
             "species": species,
