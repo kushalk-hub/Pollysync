@@ -26,6 +26,7 @@ in your .env. No key needed for NASA POWER or GBIF.
 from __future__ import annotations
 
 import os
+import logging
 from datetime import date, timedelta
 from typing import Optional
 
@@ -33,6 +34,8 @@ import httpx
 
 from app.core.cache import cache_get, cache_set
 from app.core.circuit_breaker import circuit_breaker
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
 # 1. WEATHER (NASA POWER) -> temp_7d_mean, humidity, rainfall_7d, wind_speed
@@ -92,24 +95,29 @@ async def fetch_nasa_power_7d_protected(lat: float, lon: float, as_of: date) -> 
 # --------------------------------------------------------------------------
 
 _ee_initialized = False
+_ee_failed = False
 
 
 def _init_earth_engine():
-    global _ee_initialized
-    if _ee_initialized:
+    global _ee_initialized, _ee_failed
+    if _ee_initialized or _ee_failed:
         return
-    import ee  # imported lazily so the rest of the module works without it installed
-    from app.core.config import settings
+    try:
+        import ee  # imported lazily so the rest of the module works without it installed
+        from app.core.config import settings
 
-    service_account = settings.ee_service_account
-    key_file = settings.ee_private_key_file
-    if service_account and key_file:
-        credentials = ee.ServiceAccountCredentials(service_account, key_file)
-        ee.Initialize(credentials)
-    else:
-        # falls back to local `earthengine authenticate` token for dev use
-        ee.Initialize()
-    _ee_initialized = True
+        service_account = settings.ee_service_account
+        key_file = settings.ee_private_key_file
+        if service_account and key_file:
+            credentials = ee.ServiceAccountCredentials(service_account, key_file)
+            ee.Initialize(credentials)
+        else:
+            # falls back to local `earthengine authenticate` token for dev use
+            ee.Initialize()
+        _ee_initialized = True
+    except Exception as e:
+        _ee_failed = True
+        logger.warning(f"Earth Engine initialization failed: {e}")
 
 
 async def fetch_ndvi(lat: float, lon: float, as_of: date, window_days: int = 20) -> Optional[float]:
@@ -145,7 +153,11 @@ async def fetch_ndvi(lat: float, lon: float, as_of: date, window_days: int = 20)
         result = value.getInfo()
         return round(result, 4) if result is not None else None
 
-    return await anyio.to_thread.run_sync(_query)
+    try:
+        return await anyio.to_thread.run_sync(_query)
+    except Exception as e:
+        logger.warning(f"NDVI fetch failed for ({lat}, {lon}): {e}")
+        return None
 
 
 @circuit_breaker("earth-engine", max_failures=3, window_seconds=300)
