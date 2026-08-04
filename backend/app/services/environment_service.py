@@ -300,3 +300,36 @@ async def get_bee_richness_with_cache(lat: float, lon: float, radius_km: float =
         return richness
     except Exception:
         return 0
+
+
+if __name__ == "__main__":
+    import argparse
+    import asyncio
+
+    parser = argparse.ArgumentParser(
+        description="Check Earth Engine / NDVI connectivity for a coordinate."
+    )
+    parser.add_argument("--lat", type=float, default=19.9975)
+    parser.add_argument("--lon", type=float, default=73.7898)
+    parser.add_argument("--crop", type=str, default="Mustard")
+    parser.add_argument("--force", action="store_true",
+                        help="Bypass the EE init failure flag (retry after fixing auth)")
+    args = parser.parse_args()
+
+    async def _selfcheck():
+        if args.force:
+            global _ee_failed, _ee_initialized
+            _ee_failed = False
+            _ee_initialized = False
+        from app.core.cache import cache_clear_all
+        cache_clear_all()
+        ndvi = await fetch_ndvi(args.lat, args.lon, date.today())
+        print(f"NDVI for ({args.lat}, {args.lon}): {ndvi}")
+        if ndvi is None:
+            print("NDVI is None -> Earth Engine still not working (check auth / roles).")
+        else:
+            print("NDVI OK -> Earth Engine is configured and returning real data.")
+        features = await get_environment_features(args.lat, args.lon, args.crop, as_of=date.today())
+        print(f"ndvi in full feature dict: {features.get('ndvi')}")
+
+    asyncio.run(_selfcheck())
