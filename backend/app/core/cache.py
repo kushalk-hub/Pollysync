@@ -1,14 +1,44 @@
 import json
 import time
+import threading
 import logging
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 _l1_cache: dict = {}
-L1_DEFAULT_TTL = 300  
+L1_DEFAULT_TTL = 300
+_L1_MAX_ENTRIES: Optional[int] = None
+_lock = threading.RLock()
 
 _redis_client = None
+
+
+def set_max_entries(limit: Optional[int]):
+    global _L1_MAX_ENTRIES
+    with _lock:
+        _L1_MAX_ENTRIES = limit
+        _enforce_bound()
+
+
+def get_cache_size() -> int:
+    with _lock:
+        return len(_l1_cache)
+
+
+def _prune_expired():
+    now = time.time()
+    expired = [k for k, entry in _l1_cache.items() if entry["expires_at"] <= now]
+    for k in expired:
+        del _l1_cache[k]
+
+
+def _enforce_bound():
+    if _L1_MAX_ENTRIES is None:
+        return
+    while len(_l1_cache) > _L1_MAX_ENTRIES:
+        oldest = min(_l1_cache.items(), key=lambda item: item[1]["expires_at"])
+        del _l1_cache[oldest[0]]
 
 def _get_redis():
     global _redis_client
@@ -28,12 +58,15 @@ def cache_get(key: str, group: str = "default") -> Optional[Any]:
     full_key = f"{group}:{key}"
     now = time.time()
 
-    # L1 check
-    if full_key in _l1_cache:
-        entry = _l1_cache[full_key]
-        if entry["expires_at"] > now:
-            return entry["value"]
-        del _l1_cache[full_key]
+    with _lock:
+        _prune_expired()
+
+        # L1 check
+        if full_key in _l1_cache:
+            entry = _l1_cache[full_key]
+            if entry["expires_at"] > now:
+                return entry["value"]
+            del _l1_cache[full_key]
 
     # L2 Redis check
     redis_client = _get_redis()
@@ -43,10 +76,12 @@ def cache_get(key: str, group: str = "default") -> Optional[Any]:
             if data:
                 value = json.loads(data)
                 # Backfill L1
-                _l1_cache[full_key] = {
-                    "value": value,
-                    "expires_at": now + L1_DEFAULT_TTL,
-                }
+                with _lock:
+                    _l1_cache[full_key] = {
+                        "value": value,
+                        "expires_at": now + L1_DEFAULT_TTL,
+                    }
+                    _enforce_bound()
                 return value
         except Exception as e:
             logger.warning(f"Redis get failed: {e}")
@@ -58,10 +93,13 @@ def cache_set(key: str, value: Any, ttl: int = L1_DEFAULT_TTL, group: str = "def
     full_key = f"{group}:{key}"
     now = time.time()
 
-    _l1_cache[full_key] = {
-        "value": value,
-        "expires_at": now + ttl,
-    }
+    with _lock:
+        _prune_expired()
+        _l1_cache[full_key] = {
+            "value": value,
+            "expires_at": now + ttl,
+        }
+        _enforce_bound()
 
     redis_client = _get_redis()
     if redis_client:
@@ -73,9 +111,11 @@ def cache_set(key: str, value: Any, ttl: int = L1_DEFAULT_TTL, group: str = "def
 
 def cache_delete_group(group: str):
     # L1 delete
-    keys_to_delete = [k for k in _l1_cache if k.startswith(f"{group}:")]
-    for k in keys_to_delete:
-        del _l1_cache[k]
+    with _lock:
+        _prune_expired()
+        keys_to_delete = [k for k in _l1_cache if k.startswith(f"{group}:")]
+        for k in keys_to_delete:
+            del _l1_cache[k]
 
     # L2 Redis delete
     redis_client = _get_redis()
@@ -90,7 +130,8 @@ def cache_delete_group(group: str):
 
 def cache_clear_all():
     global _l1_cache
-    _l1_cache = {}
+    with _lock:
+        _l1_cache = {}
 
     redis_client = _get_redis()
     if redis_client:
