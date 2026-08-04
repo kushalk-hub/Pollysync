@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import logging
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -109,7 +110,14 @@ def _init_earth_engine():
         service_account = settings.ee_service_account
         key_file = settings.ee_private_key_file
         if service_account and key_file:
-            credentials = ee.ServiceAccountCredentials(service_account, key_file)
+            key_path = Path(key_file)
+            if not key_path.is_absolute():
+                backend_dir = Path(__file__).resolve().parent.parent.parent
+                if key_path.parts and key_path.parts[0] == "backend":
+                    key_path = backend_dir.parent / key_path
+                else:
+                    key_path = backend_dir / key_path
+            credentials = ee.ServiceAccountCredentials(service_account, str(key_path))
             ee.Initialize(credentials)
         else:
             # falls back to local `earthengine authenticate` token for dev use
@@ -120,38 +128,46 @@ def _init_earth_engine():
         logger.warning(f"Earth Engine initialization failed: {e}")
 
 
+_NDVI_MAX_CLOUD = 20
+_NDVI_FALLBACK_WINDOWS = (60, 90, 180)
+
+
 async def fetch_ndvi(lat: float, lon: float, as_of: date, window_days: int = 20) -> Optional[float]:
     """Mean NDVI from the least-cloudy Sentinel-2 scenes in a window ending
-    on `as_of`. Earth Engine's Python client is synchronous, so this runs it
-    in a thread to avoid blocking the FastAPI event loop."""
+    on `as_of`. When no <20%-cloud scene exists in `window_days` (common
+    during the monsoon), the search widens progressively up to 180 days.
+    Earth Engine's Python client is synchronous, so this runs it in a thread
+    to avoid blocking the FastAPI event loop."""
     import anyio
     import ee
 
     def _query():
         _init_earth_engine()
         point = ee.Geometry.Point([lon, lat])
-        start = (as_of - timedelta(days=window_days)).isoformat()
         end = as_of.isoformat()
+        for days in (window_days,) + _NDVI_FALLBACK_WINDOWS:
+            start = (as_of - timedelta(days=days)).isoformat()
 
-        collection = (
-            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-            .filterBounds(point)
-            .filterDate(start, end)
-            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
-        )
-        if collection.size().getInfo() == 0:
-            return None
+            collection = (
+                ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(point)
+                .filterDate(start, end)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _NDVI_MAX_CLOUD))
+            )
+            if collection.size().getInfo() == 0:
+                continue
 
-        def add_ndvi(img):
-            return img.addBands(img.normalizedDifference(["B8", "B4"]).rename("ndvi"))
+            def add_ndvi(img):
+                return img.addBands(img.normalizedDifference(["B8", "B4"]).rename("ndvi"))
 
-        with_ndvi = collection.map(add_ndvi)
-        mean_ndvi_img = with_ndvi.select("ndvi").mean()
-        value = mean_ndvi_img.reduceRegion(
-            reducer=ee.Reducer.mean(), geometry=point, scale=10
-        ).get("ndvi")
-        result = value.getInfo()
-        return round(result, 4) if result is not None else None
+            with_ndvi = collection.map(add_ndvi)
+            mean_ndvi_img = with_ndvi.select("ndvi").mean()
+            value = mean_ndvi_img.reduceRegion(
+                reducer=ee.Reducer.mean(), geometry=point, scale=10
+            ).get("ndvi")
+            result = value.getInfo()
+            return round(result, 4) if result is not None else None
+        return None
 
     try:
         return await anyio.to_thread.run_sync(_query)
