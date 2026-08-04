@@ -1,5 +1,6 @@
 import pytest
 from app.core.circuit_breaker import circuit_breaker, CircuitState, _breakers
+from app.core.circuit_breaker import get_breaker
 
 
 @pytest.fixture(autouse=True)
@@ -8,6 +9,19 @@ def clear_breakers():
     _breakers.clear()
     yield
     _breakers.clear()
+
+
+def test_circuit_breaker_thread_safe():
+    import threading
+    breaker = get_breaker("concurrent", max_failures=3, window_seconds=300)
+    def hit():
+        for _ in range(50):
+            if breaker.should_allow_call():
+                breaker.record_success()
+    threads = [threading.Thread(target=hit) for _ in range(8)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+    assert breaker.state in (CircuitState.CLOSED, CircuitState.OPEN, CircuitState.HALF_OPEN)
 
 
 def test_circuit_breaker_closed_on_success():
