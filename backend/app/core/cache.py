@@ -12,6 +12,8 @@ _L1_MAX_ENTRIES: Optional[int] = None
 _lock = threading.RLock()
 
 _redis_client = None
+_redis_failed_at = 0.0
+_REDIS_RETRY_SECONDS = 60
 
 
 def set_max_entries(limit: Optional[int]):
@@ -41,14 +43,23 @@ def _enforce_bound():
         del _l1_cache[oldest[0]]
 
 def _get_redis():
-    global _redis_client
+    global _redis_client, _redis_failed_at
     if _redis_client is None:
+        now = time.time()
+        if now - _redis_failed_at < _REDIS_RETRY_SECONDS:
+            return None
         try:
             import redis
             from app.core.config import settings
-            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+            _redis_client = redis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=2,
+            )
             _redis_client.ping()
+            _redis_failed_at = 0.0
         except Exception as e:
+            _redis_failed_at = now
             logger.warning(f"Redis unavailable, L1-only mode: {e}")
             _redis_client = None
     return _redis_client
