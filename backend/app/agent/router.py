@@ -50,14 +50,14 @@ async def assemble_farm_context(farm_id: str, db: Session) -> str:
     
     # Get live weather
     try:
-        weather = await get_weather_with_cache(str(farm.id), farm.latitude, farm.longitude, db)
+        weather = await get_weather_with_cache(str(farm.id), farm.location_lat, farm.location_lng, db)
         weather_info = f"Temperature: {weather.get('current', {}).get('temperature_2m', 'N/A')}°C, Humidity: {weather.get('current', {}).get('relative_humidity_2m', 'N/A')}%"
     except Exception:
         weather_info = "Weather data unavailable"
     
     # Get bee data
     try:
-        bee_data = await get_bee_data_with_cache(str(farm.id), farm.latitude, farm.longitude, db)
+        bee_data = await get_bee_data_with_cache(str(farm.id), farm.location_lat, farm.location_lng, db)
         bee_info = f"Bee species richness: {bee_data.get('richness', 'N/A')}"
     except Exception:
         bee_info = "Bee data unavailable"
