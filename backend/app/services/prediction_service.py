@@ -314,17 +314,17 @@ async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Predi
     if models_loaded:
         try:
             flowering_df = _build_model_frame(features, f_model, f_scaler)
-            X_scaled = f_scaler.transform(flowering_df)
+            X_scaled = pd.DataFrame(f_scaler.transform(flowering_df), columns=flowering_df.columns)
             start_doy = int(round(f_model.predict(X_scaled)[0]))
             start_doy = max(1, min(365, start_doy))
             confidence = 0.92 if use_mh else 0.87
 
             psi_df = _build_model_frame(features, p_model, p_scaler)
-            psi = int(round(p_model.predict(p_scaler.transform(psi_df))[0]))
+            psi = int(round(p_model.predict(pd.DataFrame(p_scaler.transform(psi_df), columns=psi_df.columns))[0]))
             psi = max(0, min(100, psi))
 
             risk_df = _build_model_frame(features, r_model, r_scaler)
-            risk_raw = r_model.predict(r_scaler.transform(risk_df))[0]
+            risk_raw = r_model.predict(pd.DataFrame(r_scaler.transform(risk_df), columns=risk_df.columns))[0]
             if hasattr(r_model, "_label_encoder"):
                 risk = r_model._label_encoder.inverse_transform([risk_raw])[0]
             else:
