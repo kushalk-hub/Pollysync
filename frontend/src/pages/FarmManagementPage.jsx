@@ -33,6 +33,8 @@ export default function FarmManagementPage() {
     lng: null,
     area_acres: "",
     soil_type: "loamy",
+    pesticide_usage: "",
+    water_availability: "",
     planting_date: "",
     harvest_date: "",
   });
@@ -81,6 +83,8 @@ export default function FarmManagementPage() {
       lng: null,
       area_acres: "",
       soil_type: "loamy",
+      pesticide_usage: "",
+      water_availability: "",
       planting_date: "",
       harvest_date: "",
     });
@@ -137,6 +141,8 @@ export default function FarmManagementPage() {
         location_lng: form.lng,
         area_acres: parseFloat(form.area_acres),
         soil_type: form.soil_type,
+        pesticide_usage: form.pesticide_usage || null,
+        water_availability: form.water_availability || null,
         planting_date: form.planting_date || null,
         harvest_date: form.harvest_date || null,
       });
@@ -278,6 +284,41 @@ export default function FarmManagementPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
               <div className="space-y-sm">
                 <label className="block font-label-md text-label-md font-bold text-on-surface">
+                  Pesticide Use <span className="font-body-sm text-body-sm font-normal text-on-surface-variant">(affects PSI)</span>
+                </label>
+                <select
+                  value={form.pesticide_usage}
+                  onChange={(e) => setForm({ ...form, pesticide_usage: e.target.value })}
+                  disabled={submitting}
+                  className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-on-surface font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Not recorded</option>
+                  <option value="none">None (pollinator-friendly)</option>
+                  <option value="pre_flowering">Pre-flowering only</option>
+                  <option value="during_flowering">During flowering</option>
+                </select>
+              </div>
+              <div className="space-y-sm">
+                <label className="block font-label-md text-label-md font-bold text-on-surface">
+                  Water Availability <span className="font-body-sm text-body-sm font-normal text-on-surface-variant">(affects PSI)</span>
+                </label>
+                <select
+                  value={form.water_availability}
+                  onChange={(e) => setForm({ ...form, water_availability: e.target.value })}
+                  disabled={submitting}
+                  className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-on-surface font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Not recorded</option>
+                  <option value="irrigated">Irrigated</option>
+                  <option value="rainfed">Rainfed</option>
+                  <option value="water_stressed">Water-stressed</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
+              <div className="space-y-sm">
+                <label className="block font-label-md text-label-md font-bold text-on-surface">
                   Planting Date <span className="font-body-sm text-body-sm font-normal text-on-surface-variant">(optional)</span>
                 </label>
                 <input
@@ -375,6 +416,18 @@ export default function FarmManagementPage() {
                     <p className="font-label-sm text-label-sm text-on-surface-variant">PSI</p>
                     <p className="font-body-md text-body-md text-on-surface mt-xs">
                       {farm.latest_psi ? farm.latest_psi.toFixed(0) : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-label-sm text-label-sm text-on-surface-variant">Pesticide</p>
+                    <p className="font-body-md text-body-md text-on-surface mt-xs capitalize">
+                      {farm.pesticide_usage ? farm.pesticide_usage.replace("_", " ") : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-label-sm text-label-sm text-on-surface-variant">Water</p>
+                    <p className="font-body-md text-body-md text-on-surface mt-xs capitalize">
+                      {farm.water_availability ? farm.water_availability.replace("_", " ") : "—"}
                     </p>
                   </div>
                 </div>

@@ -44,6 +44,8 @@ Farm details:
 - Expected harvest: {farm.harvest_date or 'Not recorded'}
 - Variety: {farm.variety or 'Not recorded'}
 - Soil: {farm.soil_type or 'Not recorded'}
+- Pesticide use: {farm.pesticide_usage or 'Not recorded'} (none / pre_flowering / during_flowering)
+- Water availability: {farm.water_availability or 'Not recorded'} (rainfed / irrigated / water_stressed)
 
 Current conditions:
 - Temperature: {weather.get('temperature', 'N/A')} C
@@ -145,13 +147,34 @@ def _generate_local_recommendation(farm: Farm, prediction: Prediction) -> str:
         warning = "No urgent warning; continue monitoring weather ahead of the flowering window."
 
     action_lines = "\n".join(f"- {action}" for action in actions)
+
+    practice_notes = []
+    pesticide = (farm.pesticide_usage or "").strip().lower()
+    water = (farm.water_availability or "").strip().lower()
+    if pesticide == "during_flowering":
+        practice_notes.append("Pause all pesticide sprays immediately during the flowering window to protect pollinators.")
+    elif pesticide == "pre_flowering":
+        practice_notes.append("Keep pesticide applications outside the flowering window only.")
+    if water == "water_stressed":
+        practice_notes.append("Address water stress before midday: irrigation is critical for flower retention.")
+    elif water == "rainfed":
+        practice_notes.append("Rainfed field: monitor the 7-day rainfall trend and soil moisture closely.")
+    practice_lines = "\n".join(f"- {note}" for note in practice_notes)
+
+    watch_extra = ""
+    if pesticide == "during_flowering":
+        watch_extra += " Ongoing pesticide use during flowering is actively suppressing pollinator activity."
+    if water == "water_stressed":
+        watch_extra += " Water stress is reducing flower retention and pollen viability."
+
     return (
         f"## {crop} advisory\n\n"
         f"Your PSI is {prediction.psi_score}/100 ({prediction.risk_level.lower()} risk). "
         f"Temperature is {temperature}°C, humidity is {humidity}%, wind is {wind} km/h, and NDVI indicates {ndvi_note}. "
         f"The predicted flowering window is {prediction.flowering_start} to {prediction.flowering_end}.\n\n"
-        f"**Recommended now**\n{action_lines}\n\n"
-        f"**Watch out**\n{warning}\n\n"
+        f"**Recommended now**\n{action_lines}\n"
+        f"{practice_lines + chr(10) if practice_lines else ''}"
+        f"**Watch out**\n{warning}{watch_extra}\n\n"
         "**Confidence:** Based on the latest weather, farm settings, and prediction model."
     )
 

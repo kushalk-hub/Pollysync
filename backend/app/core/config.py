@@ -34,7 +34,7 @@ class Settings:
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    redis_url: str = os.getenv("REDIS_URL", "")
     pollen_api_key: str = os.getenv("POLLEN_API_KEY", "")
     ee_service_account: str = os.getenv("EE_SERVICE_ACCOUNT", "")
     ee_private_key_file: str = os.getenv("EE_PRIVATE_KEY_FILE", "")

@@ -67,12 +67,14 @@ def test_l1_cache_hit():
 
 
 def test_l1_cache_evicts_when_over_max():
-    from app.core.cache import set_max_entries, get_cache_size
+    from app.core.cache import set_max_entries, get_cache_size, cache_delete_group
     set_max_entries(3)
     cache_clear_all()
     for i in range(10):
         cache_set(f"k{i}", i, ttl=60, group="cap")
     assert get_cache_size() <= 3
+    # Clear both tiers so the L2 backfill can't mask L1 eviction
+    cache_delete_group("cap")
     assert cache_get("k0", group="cap") is None  # oldest evicted
     cache_clear_all()
     set_max_entries(None)  # reset to default

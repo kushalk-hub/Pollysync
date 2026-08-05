@@ -72,6 +72,8 @@ CREATE TABLE farms (
   crop_type TEXT NOT NULL,
   variety TEXT,
   irrigation_method TEXT,
+  pesticide_usage TEXT,
+  water_availability TEXT,
   planting_date TEXT,
   harvest_date TEXT,
   location_name TEXT,

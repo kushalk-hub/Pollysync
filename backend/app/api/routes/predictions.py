@@ -116,7 +116,8 @@ def _is_prediction_stale(prediction: Prediction, farm: Farm) -> bool:
         return False
     if not snapshot:
         return False
-    for field in ("crop_type", "planting_date", "harvest_date", "location_name", "location_lat", "location_lng"):
+    for field in ("crop_type", "planting_date", "harvest_date", "location_name", "location_lat", "location_lng",
+                  "pesticide_usage", "water_availability"):
         if _normalise_setting(snapshot.get(field)) != _normalise_setting(getattr(farm, field)):
             return True
     return False

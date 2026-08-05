@@ -70,6 +70,47 @@ def _is_in_maharashtra(lat: float, lon: float) -> bool:
     )
 
 
+def _compute_practice_penalties(farm: Farm, rainfall_7d: float) -> dict:
+    """Deterministic PSI adjustments for farm-management practices.
+
+    Pesticide use directly threatens pollinators, and water availability
+    governs crop health during flowering. Both are farm-level inputs the
+    trained models were never given, so they are applied as transparent
+    rule-based penalties on top of the ML PSI score.
+    """
+    pesticide = (farm.pesticide_usage or "").strip().lower()
+    if pesticide == "during_flowering":
+        pesticide_penalty = -15
+    elif pesticide == "pre_flowering":
+        pesticide_penalty = -5
+    else:
+        pesticide_penalty = 0
+
+    water = (farm.water_availability or "").strip().lower()
+    if water == "water_stressed":
+        water_penalty = -12
+    elif water == "rainfed" and (rainfall_7d or 0) < 15:
+        water_penalty = -6
+    else:
+        water_penalty = 0
+
+    return {
+        "pesticide_usage": pesticide_penalty,
+        "water_availability": water_penalty,
+    }
+
+
+def _apply_psi_penalties(psi: int, penalties: dict) -> tuple[int, str]:
+    adjusted = max(0, min(100, psi + sum(penalties.values())))
+    if adjusted >= 70:
+        risk = "Low"
+    elif adjusted >= 40:
+        risk = "Medium"
+    else:
+        risk = "High"
+    return adjusted, risk
+
+
 def _predict_flowering_baseline(features: dict) -> tuple[int, float]:
     base = {
         "mustard": 15, "sunflower": 60, "cotton": 120,
@@ -349,6 +390,11 @@ async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Predi
         start_date = dt.fromordinal(dt(now.year, 1, 1).toordinal() + start_doy - 1)
         end_date = dt.fromordinal(start_date.toordinal() + 7)
 
+    # Farm-management practice penalties (rule-based, applied on top of ML PSI)
+    penalties = _compute_practice_penalties(farm, features.get("rainfall_7d", 0))
+    if any(penalties.values()):
+        psi, risk = _apply_psi_penalties(psi, penalties)
+
     prediction = Prediction(
         farm_id=farm.id,
         flowering_start=start_date.strftime("%Y-%m-%d"),
@@ -372,7 +418,19 @@ async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Predi
                 "location_name": farm.location_name,
                 "location_lat": farm.location_lat,
                 "location_lng": farm.location_lng,
-            }
+                "pesticide_usage": farm.pesticide_usage,
+                "water_availability": farm.water_availability,
+            },
+            "practice_penalties": {
+                "pesticide_usage": {
+                    "level": farm.pesticide_usage or "unknown",
+                    "psi_adjustment": penalties["pesticide_usage"],
+                },
+                "water_availability": {
+                    "level": farm.water_availability or "unknown",
+                    "psi_adjustment": penalties["water_availability"],
+                },
+            },
         }),
     )
     db.add(prediction)

@@ -44,13 +44,18 @@ def _enforce_bound():
 
 def _get_redis():
     global _redis_client, _redis_failed_at
+    from app.core.config import settings
+
+    # Redis is opt-in: leave REDIS_URL empty (default) for pure L1 caching.
+    if not settings.redis_url:
+        return None
+
     if _redis_client is None:
         now = time.time()
         if now - _redis_failed_at < _REDIS_RETRY_SECONDS:
             return None
         try:
             import redis
-            from app.core.config import settings
             _redis_client = redis.from_url(
                 settings.redis_url,
                 decode_responses=True,

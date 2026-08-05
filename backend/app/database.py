@@ -105,6 +105,10 @@ def reconcile_sqlite_schema() -> None:
                 connection.execute(text("ALTER TABLE farms ADD COLUMN variety VARCHAR(80)"))
             if "irrigation_method" not in existing_columns:
                 connection.execute(text("ALTER TABLE farms ADD COLUMN irrigation_method VARCHAR(50)"))
+            if "pesticide_usage" not in existing_columns:
+                connection.execute(text("ALTER TABLE farms ADD COLUMN pesticide_usage VARCHAR(30)"))
+            if "water_availability" not in existing_columns:
+                connection.execute(text("ALTER TABLE farms ADD COLUMN water_availability VARCHAR(30)"))
             if "planting_date" not in existing_columns:
                 connection.execute(text("ALTER TABLE farms ADD COLUMN planting_date VARCHAR(16)"))
             if "harvest_date" not in existing_columns:

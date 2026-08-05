@@ -134,6 +134,8 @@ def migrate_farms(sqlite_conn: sqlite3.Connection, supabase: Client, user_id_map
             "crop_type": row["crop_type"],
             "variety": row["variety"],
             "irrigation_method": row["irrigation_method"],
+            "pesticide_usage": row["pesticide_usage"],
+            "water_availability": row["water_availability"],
             "planting_date": row["planting_date"],
             "harvest_date": row["harvest_date"],
             "location_name": row["location_name"],

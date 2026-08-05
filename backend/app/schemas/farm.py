@@ -9,6 +9,8 @@ class FarmCreate(BaseModel):
     district_slug: str | None = Field(default=None, max_length=50)
     variety: str | None = Field(default=None, max_length=80)
     irrigation_method: str | None = Field(default=None, max_length=50)
+    pesticide_usage: str | None = Field(default=None, max_length=30)
+    water_availability: str | None = Field(default=None, max_length=30)
     planting_date: str | None = Field(default=None, max_length=16)
     harvest_date: str | None = Field(default=None, max_length=16)
     location_name: str | None = Field(default=None, max_length=255)
@@ -36,6 +38,8 @@ class FarmUpdate(BaseModel):
     district_slug: str | None = Field(default=None, max_length=50)
     variety: str | None = Field(default=None, max_length=80)
     irrigation_method: str | None = Field(default=None, max_length=50)
+    pesticide_usage: str | None = Field(default=None, max_length=30)
+    water_availability: str | None = Field(default=None, max_length=30)
     planting_date: str | None = Field(default=None, max_length=16)
     harvest_date: str | None = Field(default=None, max_length=16)
     location_name: str | None = Field(default=None, max_length=255)
@@ -68,6 +72,8 @@ class FarmRead(BaseModel):
     district_slug: str | None = None
     variety: str | None = None
     irrigation_method: str | None = None
+    pesticide_usage: str | None = None
+    water_availability: str | None = None
     planting_date: str | None = None
     harvest_date: str | None = None
     location_name: str | None = None

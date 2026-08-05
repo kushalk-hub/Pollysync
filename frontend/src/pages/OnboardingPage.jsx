@@ -28,6 +28,8 @@ export default function OnboardingPage() {
   const [cropType, setCropType] = useState("");
   const [areaAcres, setAreaAcres] = useState("");
   const [soilType, setSoilType] = useState("");
+  const [pesticideUsage, setPesticideUsage] = useState("");
+  const [waterAvailability, setWaterAvailability] = useState("");
   const [plantingDate, setPlantingDate] = useState("");
   const [harvestDate, setHarvestDate] = useState("");
   const [loading, setLoading] = useState(false);
@@ -91,6 +93,8 @@ export default function OnboardingPage() {
         location_name: selectedDistrict?.name || districtSlug,
         area_acres: areaAcres ? parseFloat(areaAcres) : null,
         soil_type: soilType || null,
+        pesticide_usage: pesticideUsage || null,
+        water_availability: waterAvailability || null,
         planting_date: plantingDate || null,
         harvest_date: harvestDate || null,
       });
@@ -380,6 +384,38 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
                 <div>
                   <label className="block font-label-md text-label-md text-on-surface-variant mb-sm">
+                    Pesticide Use <span className="font-body-sm text-body-sm">(optional)</span>
+                  </label>
+                  <select
+                    className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    value={pesticideUsage}
+                    onChange={(e) => setPesticideUsage(e.target.value)}
+                  >
+                    <option value="">Not recorded</option>
+                    <option value="none">None (pollinator-friendly)</option>
+                    <option value="pre_flowering">Pre-flowering only</option>
+                    <option value="during_flowering">During flowering</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-label-md text-label-md text-on-surface-variant mb-sm">
+                    Water Availability <span className="font-body-sm text-body-sm">(optional)</span>
+                  </label>
+                  <select
+                    className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    value={waterAvailability}
+                    onChange={(e) => setWaterAvailability(e.target.value)}
+                  >
+                    <option value="">Not recorded</option>
+                    <option value="irrigated">Irrigated</option>
+                    <option value="rainfed">Rainfed</option>
+                    <option value="water_stressed">Water-stressed</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+                <div>
+                  <label className="block font-label-md text-label-md text-on-surface-variant mb-sm">
                     Planting Date <span className="font-body-sm text-body-sm">(optional)</span>
                   </label>
                   <input
@@ -428,6 +464,18 @@ export default function OnboardingPage() {
                   <p>
                     <span className="font-medium text-on-surface">Area:</span>{" "}
                     {areaAcres} acres
+                  </p>
+                )}
+                {pesticideUsage && (
+                  <p>
+                    <span className="font-medium text-on-surface">Pesticide:</span>{" "}
+                    {pesticideUsage.replace("_", " ")}
+                  </p>
+                )}
+                {waterAvailability && (
+                  <p>
+                    <span className="font-medium text-on-surface">Water:</span>{" "}
+                    {waterAvailability.replace("_", " ")}
                   </p>
                 )}
                 {plantingDate && (

@@ -17,6 +17,8 @@ class Farm(Base):
     crop_type: Mapped[str] = mapped_column(String(80), index=True)
     variety: Mapped[str | None] = mapped_column(String(80), nullable=True, default=None)
     irrigation_method: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    pesticide_usage: Mapped[str | None] = mapped_column(String(30), nullable=True, default=None)
+    water_availability: Mapped[str | None] = mapped_column(String(30), nullable=True, default=None)
     planting_date: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
     harvest_date: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
     location_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
