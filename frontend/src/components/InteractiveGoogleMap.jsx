@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { applyMaharashtraBounds } from "../lib/geo";
 
 function calculateBounds(centerLat, centerLng, radiusKm) {
   const latDelta = radiusKm / 111.32;
@@ -27,14 +28,50 @@ export default function InteractiveGoogleMap({
     onLocationSelectRef.current = onLocationSelect;
   }, [onLocationSelect]);
 
-  // Single effect: init when center becomes available, update marker when center changes after init
+  function syncDistrict(map, nextDistrict) {
+    if (leafletCircleRef.current) {
+      map.removeLayer(leafletCircleRef.current);
+      leafletCircleRef.current = null;
+    }
+
+    applyMaharashtraBounds(map);
+
+    if (!nextDistrict || !nextDistrict.radius_km) return;
+
+    const bounds = calculateBounds(
+      nextDistrict.centroid_lat,
+      nextDistrict.centroid_lng,
+      nextDistrict.radius_km
+    );
+    map.setMaxBounds(bounds);
+    map.setMinZoom(11);
+    map.setMaxZoom(16);
+
+    leafletCircleRef.current = L.circle(
+      [nextDistrict.centroid_lat, nextDistrict.centroid_lng],
+      {
+        radius: nextDistrict.radius_km * 1000,
+        color: "#10b981",
+        fillColor: "#10b981",
+        fillOpacity: 0.05,
+        weight: 2,
+        dashArray: "5,5",
+      }
+    ).addTo(map);
+  }
+
+  // Single effect: init when center becomes available, update marker/constraints when center or district changes after init
   useEffect(() => {
     if (!mapRef.current || !center) return;
 
-    // Map already initialized — just update marker
+    // Map already initialized — update marker, district constraints, then move the view
     if (leafletMapRef.current && leafletMarkerRef.current) {
       leafletMarkerRef.current.setLatLng([center.lat, center.lng]);
-      leafletMapRef.current.setView([center.lat, center.lng], leafletMapRef.current.getZoom());
+      syncDistrict(leafletMapRef.current, district);
+      leafletMapRef.current.setView(
+        [center.lat, center.lng],
+        district ? 13 : leafletMapRef.current.getZoom()
+      );
       return;
     }
 
@@ -93,30 +130,7 @@ export default function InteractiveGoogleMap({
       leafletMapRef.current = map;
       leafletMarkerRef.current = marker;
 
-      if (district && district.radius_km) {
-        const bounds = calculateBounds(
-          district.centroid_lat,
-          district.centroid_lng,
-          district.radius_km
-        );
-        map.setMaxBounds(bounds);
-        map.setMinZoom(11);
-        map.setMaxZoom(16);
-        map.setView([district.centroid_lat, district.centroid_lng], 13);
-
-        const circle = L.circle(
-          [district.centroid_lat, district.centroid_lng],
-          {
-            radius: district.radius_km * 1000,
-            color: "#10b981",
-            fillColor: "#10b981",
-            fillOpacity: 0.05,
-            weight: 2,
-            dashArray: "5,5",
-          }
-        ).addTo(map);
-        leafletCircleRef.current = circle;
-      }
+      syncDistrict(map, district);
 
       setTimeout(() => map.invalidateSize(), 200);
     }, 50);

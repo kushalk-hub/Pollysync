@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
+import { applyMaharashtraBounds } from "../lib/geo";
 
 export default function BeeMap({ center = [20, 78], occurrences = [], zoom = 8, farmName = "Farm", crop = "", psiScore }) {
   const mapRef = useRef(null);
@@ -16,6 +17,7 @@ export default function BeeMap({ center = [20, 78], occurrences = [], zoom = 8, 
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           maxZoom: 19,
         }).addTo(map);
+        applyMaharashtraBounds(map);
         mapInstance.current = map;
       }
     }

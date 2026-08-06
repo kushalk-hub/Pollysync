@@ -10,9 +10,7 @@ import { useFarm } from "../context/FarmContext";
 
 const CROPS = [
   { value: "Mustard", icon: "eco", desc: "Brassica juncea. High sensitivity to temperature fluctuations during bloom.", bg: "bg-secondary-container/20", color: "text-secondary-container" },
-  { value: "Wheat", icon: "grass", desc: "Triticum aestivum. Predominantly wind-pollinated, moderate data density.", bg: "bg-surface-container-high", color: "text-secondary" },
   { value: "Sunflower", icon: "local_florist", desc: "Helianthus annuus. Highly dependent on bee activity and direct sunlight metrics.", bg: "bg-surface-container-high", color: "text-secondary" },
-  { value: "Rice", icon: "water_drop", desc: "Oryza sativa. Requires detailed humidity and standing water analysis.", bg: "bg-surface-container-high", color: "text-on-surface-variant" },
   { value: "Cotton", icon: "filter_drama", desc: "Gossypium. Complex pollination cycle requiring hybrid meteorological models.", bg: "bg-surface-container-high", color: "text-on-surface-variant" },
 ];
 

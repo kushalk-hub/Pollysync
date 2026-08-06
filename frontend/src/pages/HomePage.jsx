@@ -23,9 +23,7 @@ const FEATURES = [
 
 const CROPS = [
   { name: "Mustard", emoji: "🌼" },
-  { name: "Wheat", emoji: "🌾" },
   { name: "Sunflower", emoji: "🌻" },
-  { name: "Rice", emoji: "🌱" },
   { name: "Cotton", emoji: "☁️" },
 ];
 
@@ -163,7 +161,7 @@ export default function HomePage() {
       <section className="py-3xl px-6 bg-surface" id="crops">
         <div className="max-w-container-max mx-auto overflow-hidden">
           <h2 className="font-headline-lg text-headline-lg text-on-surface mb-2xl text-center md:text-left">Supported Crops</h2>
-          <div className="flex flex-nowrap md:grid md:grid-cols-5 gap-md overflow-x-auto pb-6">
+          <div className="flex flex-nowrap md:grid md:grid-cols-3 gap-md overflow-x-auto pb-6">
             {CROPS.map((c, i) => (
               <div
                 key={c.name}

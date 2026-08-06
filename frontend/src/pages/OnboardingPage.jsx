@@ -9,9 +9,7 @@ import DistrictSelector from "../components/DistrictSelector";
 
 const CROPS = [
   { value: "Mustard", icon: "eco", desc: "Brassica juncea" },
-  { value: "Wheat", icon: "grass", desc: "Triticum aestivum" },
   { value: "Sunflower", icon: "local_florist", desc: "Helianthus annuus" },
-  { value: "Rice", icon: "water_drop", desc: "Oryza sativa" },
   { value: "Cotton", icon: "filter_drama", desc: "Gossypium" },
 ];
 

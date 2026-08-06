@@ -16,8 +16,6 @@ const CROP_OPTIONS = [
   { value: "Mustard", label: "Mustard", icon: "eco" },
   { value: "Sunflower", label: "Sunflower", icon: "local_florist" },
   { value: "Cotton", label: "Cotton", icon: "filter_drama" },
-  { value: "Wheat", label: "Wheat", icon: "grass" },
-  { value: "Rice", label: "Rice", icon: "rice_bowl" },
 ];
 
 const SOIL_TYPES = [

@@ -38,18 +38,10 @@ const LOCATIONS = [
   { name: "Maharashtra", lat: 19.7515, lng: 75.7139 },
   { name: "Rajasthan", lat: 27.0238, lng: 74.2179 },
   { name: "Uttar Pradesh", lat: 26.8467, lng: 80.9462 },
-  { name: "Bihar", lat: 25.0961, lng: 85.3131 },
   { name: "Karnataka", lat: 15.3173, lng: 75.7139 },
   { name: "Andhra Pradesh", lat: 15.9129, lng: 79.7399 },
   { name: "Telangana", lat: 17.1232, lng: 79.2089 },
-  { name: "Odisha", lat: 20.9517, lng: 85.0985 },
-  { name: "West Bengal", lat: 22.9868, lng: 87.855 },
   { name: "Tamil Nadu", lat: 11.1271, lng: 78.6569 },
-  { name: "Kerala", lat: 10.8505, lng: 76.2711 },
-  { name: "Assam", lat: 26.2006, lng: 92.9376 },
-  { name: "Jharkhand", lat: 23.6102, lng: 85.2799 },
-  { name: "Chhattisgarh", lat: 21.2787, lng: 81.8661 },
-  { name: "Uttarakhand", lat: 30.0668, lng: 79.0193 },
 ];
 
 export function CropSelector({ value = "", onChange, disabled = false }) {
