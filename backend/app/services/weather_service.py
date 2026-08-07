@@ -1,3 +1,5 @@
+import logging
+import traceback
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -6,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.models.weather_cache import WeatherCache
 from app.core.cache import cache_get, cache_set
 from app.core.circuit_breaker import circuit_breaker
+
+logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = (
     "https://api.open-meteo.com/v1/forecast"
@@ -97,6 +101,22 @@ def _has_daily_forecast(data: dict | None) -> bool:
     return bool(data and data.get("daily", {}).get("time"))
 
 
+def get_latest_forecast_row(farm_id: str, db: Session) -> WeatherCache | None:
+    """Most recent DB row that still carries a real daily forecast, regardless
+    of age. Used as a stale fallback so an outage never returns an empty array
+    when real forecast data was captured at some point."""
+    rows = (
+        db.query(WeatherCache)
+        .filter(WeatherCache.farm_id == farm_id)
+        .order_by(WeatherCache.timestamp.desc())
+        .all()
+    )
+    for row in rows:
+        if _has_daily_forecast(row.payload):
+            return row
+    return None
+
+
 async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Session) -> dict:
     """Get weather data with L1/L2 cache layer."""
     cache_key = f"{lat},{lng}"
@@ -117,34 +137,62 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
         cache_set(cache_key, result, ttl=900, group="weather")
         return result
 
-    # Live fetch
+    # Live fetch (circuit-breaker protected so repeated failures short-circuit)
+    live_weather = None
     try:
-        live_weather = await fetch_weather(lat, lng)
+        live_weather = await fetch_weather_protected(lat, lng)
+        if not _has_daily_forecast(live_weather):
+            logger.warning(
+                "[weather] live fetch for farm %s (%s,%s) returned no daily data",
+                farm_id, lat, lng,
+            )
+            live_weather = None
+    except Exception:
+        logger.warning(
+            "[weather] live fetch failed for farm %s (%s,%s):\n%s",
+            farm_id, lat, lng, traceback.format_exc(limit=3),
+        )
+
+    if live_weather is not None:
         live_weather["source"] = "live"
+        try:
+            cache_weather(farm_id, live_weather, db)
+        except Exception:
+            logger.warning("[weather] failed to persist live weather to DB", exc_info=True)
         cache_set(cache_key, live_weather, ttl=900, group="weather")
         return live_weather
-    except Exception:
-        # Last resort: a legacy current-only DB row (no forecast), else the
-        # generic fallback. Never lets a stale empty entry block a refetch.
-        if db_weather and not db_weather.payload:
-            result = {
-                "current": {
-                    "temperature_2m": db_weather.temperature,
-                    "relative_humidity_2m": db_weather.humidity,
-                    "precipitation": db_weather.rainfall,
-                    "wind_speed_10m": db_weather.wind_speed,
-                },
-                "daily": {
-                    "time": [],
-                    "temperature_2m_max": [],
-                    "temperature_2m_min": [],
-                    "precipitation_sum": [],
-                },
-                "source": "db_cache",
-                "fallback": True,
-            }
-            cache_set(cache_key, result, ttl=900, group="weather")
-            return result
-        fallback = get_fallback_weather(lat, lng)
-        fallback["source"] = "fallback"
-        return fallback
+
+    # Failure path -- stale real data beats an empty forecast
+    stale = get_latest_forecast_row(farm_id, db)
+    if stale:
+        result = {
+            **stale.payload,
+            "source": "db_cache_stale",
+        }
+        cache_set(cache_key, result, ttl=900, group="weather")
+        return result
+
+    # Last resort: a legacy current-only DB row (no forecast), else the
+    # generic fallback.
+    if db_weather and not db_weather.payload:
+        result = {
+            "current": {
+                "temperature_2m": db_weather.temperature,
+                "relative_humidity_2m": db_weather.humidity,
+                "precipitation": db_weather.rainfall,
+                "wind_speed_10m": db_weather.wind_speed,
+            },
+            "daily": {
+                "time": [],
+                "temperature_2m_max": [],
+                "temperature_2m_min": [],
+                "precipitation_sum": [],
+            },
+            "source": "db_cache",
+            "fallback": True,
+        }
+        cache_set(cache_key, result, ttl=900, group="weather")
+        return result
+    fallback = get_fallback_weather(lat, lng)
+    fallback["source"] = "fallback"
+    return fallback

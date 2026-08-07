@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -77,6 +78,47 @@ async def test_db_cache_path_legacy_row_falls_through_to_live(db):
     fetch.assert_awaited_once()
     assert result["source"] == "live"
     assert len(result["daily"]["time"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_live_fetch_is_persisted_to_db(db):
+    live = {
+        "current": {"temperature_2m": 27.0, "relative_humidity_2m": 60,
+                    "precipitation": 0.5, "wind_speed_10m": 8.0},
+        "daily": {
+            "time": ["2026-08-01"],
+            "temperature_2m_max": [30.0],
+            "temperature_2m_min": [19.0],
+            "precipitation_sum": [0.0],
+        },
+    }
+    with patch("app.services.weather_service.cache_get", return_value=None), \
+         patch("app.services.weather_service.cache_set"), \
+         patch("app.services.weather_service.fetch_weather",
+               new=AsyncMock(return_value=live)):
+        result = await get_weather_with_cache("wc-persist", 19.0, 73.0, db)
+
+    assert result["source"] == "live"
+    rows = db.query(WeatherCache).filter(WeatherCache.farm_id == "wc-persist").all()
+    assert len(rows) == 1
+    assert rows[0].payload["daily"]["time"] == ["2026-08-01"]
+
+
+@pytest.mark.asyncio
+async def test_live_failure_serves_stale_payload(db):
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    db.add(WeatherCache(farm_id="wc-stale-db", payload=_payload(7), timestamp=old))
+    db.commit()
+
+    with patch("app.services.weather_service.cache_get", return_value=None), \
+         patch("app.services.weather_service.cache_set") as cache_set, \
+         patch("app.services.weather_service.fetch_weather",
+               new=AsyncMock(side_effect=RuntimeError("open-meteo down"))):
+        result = await get_weather_with_cache("wc-stale-db", 19.0, 73.0, db)
+
+    assert result["source"] == "db_cache_stale"
+    assert len(result["daily"]["time"]) == 7
+    cache_set.assert_called_once()
 
 
 @pytest.mark.asyncio
