@@ -18,10 +18,35 @@ from app.services.weather_service import (
     get_fallback_weather,
 )
 
-MODELS_DIR = Path(
-    os.getenv("MODELS_DIR") or
-    (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "models")
-)
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+_REPO_DIR = _BACKEND_DIR.parent
+
+
+def _resolve_models_dir() -> Path:
+    """Resolve the directory holding the .pkl model artifacts.
+
+    Priority:
+    1. MODELS_DIR env var (explicit override)
+    2. <backend>/ml/models  (deployed with root directory = backend on Render)
+    3. <backend>/models     (fallback inside backend)
+    4. <repo-root>/ml/models (local development layout)
+    """
+    env_dir = os.getenv("MODELS_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    candidates = [
+        _BACKEND_DIR / "ml" / "models",
+        _BACKEND_DIR / "models",
+        _REPO_DIR / "ml" / "models",
+    ]
+    for candidate in candidates:
+        if (candidate / "flowering_model.pkl").exists():
+            return candidate
+    return candidates[0]
+
+
+MODELS_DIR = _resolve_models_dir()
 
 _model_cache = {}
 
