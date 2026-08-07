@@ -113,3 +113,54 @@ def test_cache_thread_safety():
     from app.core.cache import get_cache_size
     get_cache_size()
     cache_clear_all()
+
+
+def test_cache_delete_group_uses_scan(monkeypatch):
+    import re
+    from app.core import cache as cache_module
+
+    deleted = []
+
+    class FakeRedis:
+        def __init__(self):
+            self.data = {"grp:a": 1, "grp:b": 2, "other:c": 3}
+
+        def scan_iter(self, match="*", count=100):
+            pattern = "^" + match.replace("*", ".*") + "$"
+            return iter([k for k in self.data if re.match(pattern, k)])
+
+        def delete(self, *keys):
+            deleted.extend(keys)
+            for k in keys:
+                self.data.pop(k, None)
+
+    fake = FakeRedis()
+    monkeypatch.setattr(cache_module, "_get_redis", lambda: fake)
+    cache_module._l1_cache = {}
+
+    cache_module.cache_delete_group("grp")
+
+    assert sorted(deleted) == ["grp:a", "grp:b"]
+    assert "other:c" not in deleted
+    assert "other:c" in fake.data
+    cache_module._l1_cache = {}
+
+
+def test_cache_health_states(monkeypatch):
+    from types import SimpleNamespace
+    from app.core import cache as cache_module
+
+    monkeypatch.setattr(cache_module, "_get_redis", lambda: None)
+
+    monkeypatch.setattr("app.core.config.settings", SimpleNamespace(redis_url=""))
+    assert cache_module.cache_health() == {"redis": "disabled"}
+
+    monkeypatch.setattr("app.core.config.settings", SimpleNamespace(redis_url="redis://localhost:6379"))
+    assert cache_module.cache_health() == {"redis": "unavailable"}
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(cache_module, "_get_redis", lambda: FakeRedis())
+    assert cache_module.cache_health() == {"redis": "ok"}

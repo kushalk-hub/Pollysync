@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from "../context/AuthContext";
 import { useFarm } from "../context/FarmContext";
 import { getDashboardSummary, getWeatherCurrent, getLatestPrediction } from "../lib/api";
@@ -110,6 +112,14 @@ async function fetchFarmData(selectedFarm, user) {
   }
 
   return result;
+}
+
+function MarkdownLink({ href, children }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
 }
 
 export default function ChatPage() {
@@ -237,7 +247,13 @@ export default function ChatPage() {
                   <span className="font-label-sm text-label-sm text-primary font-medium">AI Assistant</span>
                 </div>
               )}
-              <p className="font-body-md text-body-md whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "assistant" ? (
+                <div className="font-body-md text-body-md prose-chat">
+                  <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>{msg.content}</Markdown>
+                </div>
+              ) : (
+                <p className="font-body-md text-body-md whitespace-pre-wrap">{msg.content}</p>
+              )}
               <span className={`font-label-sm text-label-sm block mt-xs ${msg.role === "user" ? "text-on-primary/60 text-right" : "text-on-surface-variant"
                 }`}>
                 {formatTime(msg.timestamp)}

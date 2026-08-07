@@ -133,13 +133,18 @@ def cache_delete_group(group: str):
         for k in keys_to_delete:
             del _l1_cache[k]
 
-    # L2 Redis delete
+    # L2 Redis delete (non-blocking SCAN instead of KEYS to avoid stalling Redis)
     redis_client = _get_redis()
     if redis_client:
         try:
-            keys = redis_client.keys(f"{group}:*")
-            if keys:
-                redis_client.delete(*keys)
+            batch = []
+            for key in redis_client.scan_iter(match=f"{group}:*", count=100):
+                batch.append(key)
+                if len(batch) >= 500:
+                    redis_client.delete(*batch)
+                    batch = []
+            if batch:
+                redis_client.delete(*batch)
         except Exception as e:
             logger.warning(f"Redis delete failed: {e}")
 
@@ -155,3 +160,23 @@ def cache_clear_all():
             redis_client.flushdb()
         except Exception as e:
             logger.warning(f"Redis flushdb failed: {e}")
+
+
+def cache_health() -> dict:
+    """Return Redis status for health checks. Never raises.
+
+    Returns one of: {"redis": "ok"} | {"redis": "disabled"} | {"redis": "unavailable"}.
+    """
+    from app.core.config import settings
+
+    if not settings.redis_url:
+        return {"redis": "disabled"}
+    redis_client = _get_redis()
+    if redis_client is None:
+        return {"redis": "unavailable"}
+    try:
+        redis_client.ping()
+        return {"redis": "ok"}
+    except Exception as e:
+        logger.warning(f"Redis health ping failed: {e}")
+        return {"redis": "unavailable"}

@@ -351,6 +351,13 @@ def test_http_security_headers() -> None:
         assert "max-age=" in res.headers.get("Strict-Transport-Security", "")
 
 
+def test_health_cache_endpoint() -> None:
+    with TestClient(app) as client:
+        res = client.get("/api/health/cache")
+    assert res.status_code == 200
+    assert res.json()["redis"] in {"ok", "disabled", "unavailable"}
+
+
 def test_agent_endpoint_auth_and_limit() -> None:
     with TestClient(app) as client:
         res_no_auth = client.post(

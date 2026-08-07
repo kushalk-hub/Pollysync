@@ -278,3 +278,168 @@ textarea:focus-visible,
   outline: 2px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
   outline-offset: 1px;
 }
+
+/* Markdown content styles for chat */
+.prose-chat {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.prose-chat > *:first-child {
+  margin-top: 0;
+}
+
+.prose-chat > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat p:empty {
+  display: none;
+}
+
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  font-weight: 600;
+  margin-top: 0.75em;
+  margin-bottom: 0.5em;
+}
+
+.prose-chat h1 { font-size: 1.25em; }
+.prose-chat h2 { font-size: 1.15em; }
+.prose-chat h3 { font-size: 1.05em; }
+
+.prose-chat h1 + h2,
+.prose-chat h1 + h3,
+.prose-chat h1 + h4,
+.prose-chat h2 + h3,
+.prose-chat h2 + h4,
+.prose-chat h3 + h4 {
+  margin-top: 0.25em;
+}
+
+.prose-chat p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose-chat ul,
+.prose-chat ol {
+  padding-left: 1.5em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose-chat ul ul { list-style-type: circle; }
+.prose-chat ul ul ul { list-style-type: square; }
+.prose-chat ol ol { list-style-type: lower-alpha; }
+.prose-chat ol ol ol { list-style-type: lower-roman; }
+
+.prose-chat li {
+  margin-bottom: 0.25em;
+}
+
+.prose-chat code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  word-break: break-all;
+}
+
+.dark .prose-chat code {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.prose-chat pre {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.75em 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.dark .prose-chat pre {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.prose-chat pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+  word-break: normal;
+}
+
+.prose-chat strong {
+  font-weight: 600;
+}
+
+.prose-chat blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 1em;
+  margin-left: 0;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  color: var(--color-on-surface-variant);
+}
+
+.prose-chat blockquote blockquote {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.prose-chat a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-chat a:hover {
+  opacity: 0.8;
+}
+
+.prose-chat img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.75em 0;
+}
+
+.prose-chat table {
+  border-collapse: collapse;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid var(--color-outline-variant);
+  padding: 0.4em 0.75em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.prose-chat th {
+  background: var(--color-surface-container-high);
+  font-weight: 600;
+}
+
+.prose-chat hr {
+  border: none;
+  border-top: 1px solid var(--color-outline-variant);
+  margin: 1em 0;
+}
+
+.prose-chat del {
+  opacity: 0.6;
+}
+
+.prose-chat input[type="checkbox"] {
+  margin-right: 0.5em;
+  vertical-align: middle;
+}

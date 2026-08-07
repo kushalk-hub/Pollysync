@@ -27,7 +27,7 @@ const CROPS = [
   { name: "Cotton", emoji: "☁️" },
 ];
 
-const REGIONS = ["Maharashtra", "Punjab", "Rajasthan", "Gujarat", "Haryana"];
+const REGIONS = ["Mumbai", "Nashik", "Pune", "Solapur", "Nagpur", "Kolhapur", "Amravati", "Satara", "Aurangabad", "Latur"];
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -80,8 +80,16 @@ export default function HomePage() {
         </div>
       </nav>
 
-      <section className="relative min-h-[600px] flex flex-col items-center justify-center text-center px-6 overflow-hidden">
-        <ShaderBackground variant="light" className="opacity-60" />
+      <section className="relative min-h-[750px] flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+        <img
+          src="/dashboard.png"
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        />
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-background/80 via-background/40 to-background/80" />
+        <ShaderBackground variant="light" className="opacity-30" />
         <div className="relative z-10 max-w-4xl mx-auto space-y-lg mt-3xl animate-fade-in-up">
           <h1 className="font-display text-display md:text-[64px] md:leading-[1.1] text-on-surface">
             Know Before Your <br className="hidden md:block" />
@@ -109,7 +117,7 @@ export default function HomePage() {
               </Link>
             )}
             <a
-              href="https://youtu.be/Ozf2ERxudPU?si=MjpSfMYQyzzSXG6v"
+              href="https://youtu.be/L-GMdKwa5uE?si=jMtcKcsGeJxxUnfO"
               target="_blank"
               rel="noreferrer"
               className="px-3xl py-md border-2 border-outline/30 text-on-surface font-label-md text-lg rounded-xl hover:bg-surface-container-high transition-all flex items-center gap-2"
