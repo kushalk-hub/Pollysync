@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getDashboardSummary, getPollinatorSites } from "../lib/api";
+import { getDashboardSummary } from "../lib/api";
 import { useFarm } from "../context/FarmContext";
 import BeeMap from "../components/BeeMap";
 import FloweringCalendar from "../components/FloweringCalendar";
@@ -31,7 +31,6 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [trendTab, setTrendTab] = useState("forecast");
   const [showMap, setShowMap] = useState(false);
-  const [heatmapData, setHeatmapData] = useState([]);
 
   useEffect(() => {
     if (requestedFarmId) selectFarm(requestedFarmId);
@@ -51,12 +50,6 @@ export default function DashboardPage() {
       .catch((err) => setError(err?.response?.data?.detail || err.message || "Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, [farmId, loadingFarms]);
-
-  useEffect(() => {
-    getPollinatorSites()
-      .then((data) => setHeatmapData(data.occurrences || []))
-      .catch(() => {});
-  }, []);
 
   if (loading || loadingFarms) return <DashboardSkeleton />;
   if (error) return <ErrorState error={error} onRetry={() => window.location.reload()} />;
@@ -176,7 +169,7 @@ export default function DashboardPage() {
         </button>
         {showMap && (
           <div className="border-t border-outline-variant p-md">
-            <BeeMap center={[farm.location_lat || 20, farm.location_lng || 78]} farmName={farm.name} crop={farm.crop_type} psiScore={prediction.psi_score} occurrences={(data.occurrences || []).map((o) => ({ species: o.species, lat: o.lat, lng: o.lng }))} heatmapData={heatmapData} />
+            <BeeMap center={[farm.location_lat || 20, farm.location_lng || 78]} farmName={farm.name} crop={farm.crop_type} psiScore={prediction.psi_score} occurrences={(data.occurrences || []).map((o) => ({ species: o.species, lat: o.lat, lng: o.lng }))} />
           </div>
         )}
       </section>
