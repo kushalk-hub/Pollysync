@@ -10,6 +10,7 @@ from app.models.weather_cache import WeatherCache
 from app.schemas.weather import ForecastDay, WeatherCurrent, WeatherForecast
 from app.services.weather_service import (
     fetch_weather,
+    get_weather_with_cache,
     get_cached_weather,
     parse_forecast,
     cache_weather,
@@ -64,9 +65,6 @@ async def forecast(
     current_user: User = Depends(get_current_user),
 ) -> WeatherForecast:
     farm = _owned_farm_or_404(farm_id, current_user.id, db)
-    try:
-        raw = await fetch_weather(farm.location_lat, farm.location_lng)
-    except Exception:
-        raw = get_fallback_weather(farm.location_lat, farm.location_lng)
+    raw = await get_weather_with_cache(farm_id, farm.location_lat, farm.location_lng, db)
     forecast_data = parse_forecast(raw)[:days]
     return WeatherForecast(forecast=[ForecastDay(**d) for d in forecast_data])

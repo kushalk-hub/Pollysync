@@ -99,6 +99,19 @@ _ee_initialized = False
 _ee_failed = False
 
 
+def _write_key_json_to_temp(key_json: str) -> Path:
+    """Write an EE service-account JSON (from env var) to a temp file so
+    ee.ServiceAccountCredentials can read it as a path."""
+    import json
+    import tempfile
+
+    data = json.loads(key_json)
+    fd, path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f)
+    return Path(path)
+
+
 def _init_earth_engine():
     global _ee_initialized, _ee_failed
     if _ee_initialized or _ee_failed:
@@ -109,7 +122,12 @@ def _init_earth_engine():
 
         service_account = settings.ee_service_account
         key_file = settings.ee_private_key_file
-        if service_account and key_file:
+        key_json = settings.ee_private_key_json
+        if service_account and key_json:
+            key_path = _write_key_json_to_temp(key_json)
+            credentials = ee.ServiceAccountCredentials(service_account, str(key_path))
+            ee.Initialize(credentials)
+        elif service_account and key_file:
             key_path = Path(key_file)
             if not key_path.is_absolute():
                 backend_dir = Path(__file__).resolve().parent.parent.parent

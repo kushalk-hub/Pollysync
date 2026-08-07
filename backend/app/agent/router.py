@@ -52,6 +52,17 @@ async def assemble_farm_context(farm_id: str, db: Session) -> str:
     try:
         weather = await get_weather_with_cache(str(farm.id), farm.location_lat, farm.location_lng, db)
         weather_info = f"Temperature: {weather.get('current', {}).get('temperature_2m', 'N/A')}°C, Humidity: {weather.get('current', {}).get('relative_humidity_2m', 'N/A')}%"
+        daily = weather.get("daily", {})
+        dates = daily.get("time", [])
+        t_max = daily.get("temperature_2m_max", [])
+        t_min = daily.get("temperature_2m_min", [])
+        rain = daily.get("precipitation_sum", [])
+        if dates:
+            forecast_parts = [
+                f"{d}: {t_max[i]}°C/{t_min[i]}°C, rain {rain[i]}mm"
+                for i, d in enumerate(dates)
+            ]
+            weather_info += "\n7-day forecast:\n" + "\n".join(forecast_parts)
     except Exception:
         weather_info = "Weather data unavailable"
     

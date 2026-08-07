@@ -71,6 +71,7 @@ def cache_weather(farm_id: str, data: dict, db: Session) -> WeatherCache:
         humidity=current.get("relative_humidity_2m", 0),
         rainfall=current.get("precipitation", 0),
         wind_speed=current.get("wind_speed_10m", 0),
+        payload=data,
     )
     db.add(record)
     db.commit()
@@ -102,21 +103,29 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
     # DB cache check
     db_weather = get_cached_weather(farm_id, db)
     if db_weather:
-        result = {
-            "current": {
-                "temperature_2m": db_weather.temperature,
-                "relative_humidity_2m": db_weather.humidity,
-                "precipitation": db_weather.rainfall,
-                "wind_speed_10m": db_weather.wind_speed,
-            },
-            "daily": {
-                "time": [],
-                "temperature_2m_max": [],
-                "temperature_2m_min": [],
-                "precipitation_sum": [],
-            },
-            "source": "db_cache",
-        }
+        # Full payload preserves the daily forecast; legacy rows fall back to
+        # current-conditions-only reconstruction.
+        if db_weather.payload:
+            result = {
+                **db_weather.payload,
+                "source": "db_cache",
+            }
+        else:
+            result = {
+                "current": {
+                    "temperature_2m": db_weather.temperature,
+                    "relative_humidity_2m": db_weather.humidity,
+                    "precipitation": db_weather.rainfall,
+                    "wind_speed_10m": db_weather.wind_speed,
+                },
+                "daily": {
+                    "time": [],
+                    "temperature_2m_max": [],
+                    "temperature_2m_min": [],
+                    "precipitation_sum": [],
+                },
+                "source": "db_cache",
+            }
         cache_set(cache_key, result, ttl=900, group="weather")
         return result
     

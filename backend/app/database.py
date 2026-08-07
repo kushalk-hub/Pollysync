@@ -92,7 +92,7 @@ def reconcile_sqlite_schema() -> None:
                 connection.execute(text("ALTER TABLE users ADD COLUMN lockout_until DATETIME"))
 
         if "farms" in table_names:
-            existing_columns = {column["name"] for column in inspector.get_columns("farms")}
+            existing_columns = {column["name"] for column in inspector.get_columns("farms")}            
             if "location_name" not in existing_columns:
                 connection.execute(text("ALTER TABLE farms ADD COLUMN location_name VARCHAR(255)"))
             if "area_acres" not in existing_columns:
@@ -118,6 +118,11 @@ def reconcile_sqlite_schema() -> None:
                 connection.execute(text("UPDATE farms SET location_lat = NULL WHERE location_lat = ''"))
             if "location_lng" in existing_columns:
                 connection.execute(text("UPDATE farms SET location_lng = NULL WHERE location_lng = ''"))
+
+        if "weather_cache" in table_names:
+            existing_columns = {column["name"] for column in inspector.get_columns("weather_cache")}
+            if "payload" not in existing_columns:
+                connection.execute(text("ALTER TABLE weather_cache ADD COLUMN payload TEXT"))
 
 
 def seed_districts_if_needed() -> None:

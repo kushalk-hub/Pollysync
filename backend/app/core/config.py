@@ -38,6 +38,7 @@ class Settings:
     pollen_api_key: str = os.getenv("POLLEN_API_KEY", "")
     ee_service_account: str = os.getenv("EE_SERVICE_ACCOUNT", "")
     ee_private_key_file: str = os.getenv("EE_PRIVATE_KEY_FILE", "")
+    ee_private_key_json: str = os.getenv("EE_PRIVATE_KEY_JSON", "")
 
     @property
     def allowed_origins(self) -> list[str]:

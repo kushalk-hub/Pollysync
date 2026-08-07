@@ -1,7 +1,8 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -16,6 +17,7 @@ class WeatherCache(Base):
     humidity: Mapped[float | None] = mapped_column(Float, nullable=True)
     rainfall: Mapped[float | None] = mapped_column(Float, nullable=True)
     wind_speed: Mapped[float | None] = mapped_column(Float, nullable=True)
+    payload: Mapped[dict | None] = mapped_column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
