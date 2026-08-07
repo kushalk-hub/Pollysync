@@ -7,6 +7,7 @@ class WeatherCurrent(BaseModel):
     rainfall: float
     wind_speed: float
     timestamp: str | None = None
+    source: str | None = None
 
 
 class ForecastDay(BaseModel):
@@ -18,3 +19,4 @@ class ForecastDay(BaseModel):
 
 class WeatherForecast(BaseModel):
     forecast: list[ForecastDay]
+    source: str | None = None

@@ -57,6 +57,8 @@ def init_db() -> None:
     
     if not is_postgresql:
         reconcile_sqlite_schema()
+    else:
+        reconcile_postgres_schema()
     
     # Seed districts for both SQLite and PostgreSQL
     seed_districts_if_needed()
@@ -123,6 +125,27 @@ def reconcile_sqlite_schema() -> None:
             existing_columns = {column["name"] for column in inspector.get_columns("weather_cache")}
             if "payload" not in existing_columns:
                 connection.execute(text("ALTER TABLE weather_cache ADD COLUMN payload TEXT"))
+            if "latitude" not in existing_columns:
+                connection.execute(text("ALTER TABLE weather_cache ADD COLUMN latitude FLOAT"))
+            if "longitude" not in existing_columns:
+                connection.execute(text("ALTER TABLE weather_cache ADD COLUMN longitude FLOAT"))
+
+
+def reconcile_postgres_schema() -> None:
+    """Add columns missing from an existing Supabase/Postgres schema.
+
+    The app uses create_all() at startup, which never alters existing tables,
+    so new columns are added idempotently here instead of requiring an alembic
+    migration on every deploy.
+    """
+    statements = [
+        "ALTER TABLE weather_cache ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION",
+        "ALTER TABLE weather_cache ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION",
+        "CREATE INDEX IF NOT EXISTS idx_weather_cache_coords ON weather_cache (farm_id, latitude, longitude)",
+    ]
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def seed_districts_if_needed() -> None:

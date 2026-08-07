@@ -40,7 +40,7 @@ def _payload(days: int = 7) -> dict:
 
 @pytest.mark.asyncio
 async def test_db_cache_path_returns_full_forecast(db):
-    db.add(WeatherCache(farm_id="wc-full", payload=_payload(7)))
+    db.add(WeatherCache(farm_id="wc-full", payload=_payload(7), latitude=19.0, longitude=73.0))
     db.commit()
 
     with patch("app.services.weather_service.cache_get", return_value=None), \
@@ -107,7 +107,13 @@ async def test_live_fetch_is_persisted_to_db(db):
 @pytest.mark.asyncio
 async def test_live_failure_serves_stale_payload(db):
     old = datetime.now(timezone.utc) - timedelta(hours=2)
-    db.add(WeatherCache(farm_id="wc-stale-db", payload=_payload(7), timestamp=old))
+    db.add(WeatherCache(
+        farm_id="wc-stale-db",
+        payload=_payload(7),
+        timestamp=old,
+        latitude=19.0,
+        longitude=73.0,
+    ))
     db.commit()
 
     with patch("app.services.weather_service.cache_get", return_value=None), \
@@ -152,6 +158,41 @@ async def test_stale_empty_daily_cache_entry_is_ignored(db):
 
     fetch.assert_awaited_once()
     assert result["source"] == "live"
+    assert len(result["daily"]["time"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_relocated_farm_ignores_old_coordinates_cache(db):
+    db.add(WeatherCache(
+        farm_id="wc-moved",
+        payload=_payload(7),
+        latitude=18.6,
+        longitude=73.7,
+    ))
+    db.commit()
+
+    fallback = {
+        "current": {"temperature_2m": 25.0, "relative_humidity_2m": 55,
+                    "precipitation": 0.0, "wind_speed_10m": 7.0},
+        "daily": {
+            "time": ["2026-08-01"],
+            "temperature_2m_max": [28.0],
+            "temperature_2m_min": [17.0],
+            "precipitation_sum": [0.0],
+        },
+        "source": "nasa_fallback",
+    }
+    with patch("app.services.weather_service.cache_get", return_value=None), \
+         patch("app.services.weather_service.cache_set"), \
+         patch("app.services.weather_service.fetch_weather",
+               side_effect=Exception("outage")) as fetch, \
+         patch("app.services.weather_service.get_location_aware_fallback",
+               new=AsyncMock(return_value=fallback)) as fallback_mock:
+        result = await get_weather_with_cache("wc-moved", 19.99, 73.8, db)
+
+    fetch.assert_awaited_once()
+    fallback_mock.assert_awaited_once()
+    assert result["source"] == "nasa_fallback"
     assert len(result["daily"]["time"]) == 1
 
 

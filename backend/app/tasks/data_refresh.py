@@ -49,7 +49,7 @@ def refresh_weather_batch():
         for f, weather_data in results:
             if weather_data is None:
                 continue
-            cache_weather(str(f.id), weather_data, db)
+            cache_weather(str(f.id), weather_data, db, f.location_lat, f.location_lng)
     finally:
         db.close()
 

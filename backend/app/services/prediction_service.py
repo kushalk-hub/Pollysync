@@ -15,7 +15,7 @@ from app.services.weather_service import (
     cache_weather,
     fetch_weather,
     get_cached_weather,
-    get_fallback_weather,
+    get_location_aware_fallback,
 )
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -354,18 +354,44 @@ async def _get_live_or_fallback_features(farm: Farm, weather: dict, now: datetim
 
 
 async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Prediction:
-    cached = get_cached_weather(farm.id, db)
+    cached = get_cached_weather(farm.id, db, farm.location_lat, farm.location_lng)
     if cached:
-        weather = {"temperature": cached.temperature, "humidity": cached.humidity,
-                   "rainfall": cached.rainfall, "wind_speed": cached.wind_speed}
+        weather = {
+            "temperature": cached.temperature,
+            "humidity": cached.humidity,
+            "rainfall": cached.rainfall,
+            "wind_speed": cached.wind_speed,
+            "source": "db_cache",
+            "fetched_at": cached.timestamp.isoformat() if cached.timestamp else None,
+        }
     else:
         try:
             raw = await fetch_weather(farm.location_lat, farm.location_lng)
         except Exception:
-            raw = get_fallback_weather(farm.location_lat, farm.location_lng)
-        cached = cache_weather(farm.id, raw, db)
-        weather = {"temperature": cached.temperature, "humidity": cached.humidity,
-                   "rainfall": cached.rainfall, "wind_speed": cached.wind_speed}
+            raw = await get_location_aware_fallback(farm.location_lat, farm.location_lng)
+        current = raw.get("current", {})
+        if raw.get("fallback"):
+            # Never persist fallback values as if they were real weather.
+            weather = {
+                "temperature": current.get("temperature_2m", 0),
+                "humidity": current.get("relative_humidity_2m", 0),
+                "rainfall": current.get("precipitation", 0),
+                "wind_speed": current.get("wind_speed_10m", 0),
+                "source": raw.get("source", "fallback"),
+                "fetched_at": None,
+            }
+        else:
+            cached = cache_weather(
+                farm.id, raw, db, farm.location_lat, farm.location_lng
+            )
+            weather = {
+                "temperature": cached.temperature,
+                "humidity": cached.humidity,
+                "rainfall": cached.rainfall,
+                "wind_speed": cached.wind_speed,
+                "source": "live",
+                "fetched_at": cached.timestamp.isoformat() if cached.timestamp else None,
+            }
 
     now = datetime.now(timezone.utc)
     bee_species = get_mock_bees(farm.crop_type)

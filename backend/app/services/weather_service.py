@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import traceback
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.weather_cache import WeatherCache
@@ -19,24 +21,40 @@ OPEN_METEO_URL = (
     "&timezone=auto"
 )
 
+_FALLBACK_CURRENT = {
+    "temperature_2m": 28,
+    "relative_humidity_2m": 62,
+    "precipitation": 1.2,
+    "wind_speed_10m": 9.5,
+}
+
+_COORD_TOLERANCE = 0.001  # ~100m: only rows fetched for essentially this exact spot
+
 
 async def fetch_weather(lat: float, lng: float) -> dict:
+    """Fetch Open-Meteo weather with bounded retry on 429 rate-limiting."""
+    url = OPEN_METEO_URL.format(lat=lat, lng=lng)
+    max_attempts = 3
     async with httpx.AsyncClient() as client:
-        resp = await client.get(OPEN_METEO_URL.format(lat=lat, lng=lng), timeout=10)
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(max_attempts):
+            resp = await client.get(url, timeout=10)
+            if resp.status_code == 429 and attempt < max_attempts - 1:
+                logger.warning(
+                    f"open-meteo 429 (attempt {attempt + 1}/{max_attempts}) for ({lat},{lng})"
+                )
+                await asyncio.sleep(2 ** attempt)
+                continue
+            resp.raise_for_status()
+            return resp.json()
+    raise RuntimeError("open-meteo fetch exhausted retries")
 
 
 def get_fallback_weather(lat: float, lng: float) -> dict:
-    # Conservative fallback so prediction flows can continue even if the
-    # upstream weather API is unavailable locally.
+    # Last-resort constant fallback; kept location-shaped but constant so the
+    # callers always receive a weather-shaped dict even when every upstream is
+    # down. Tagged "fallback" so it is never persisted or mistaken for real data.
     return {
-        "current": {
-            "temperature_2m": 28,
-            "relative_humidity_2m": 62,
-            "precipitation": 1.2,
-            "wind_speed_10m": 9.5,
-        },
+        "current": dict(_FALLBACK_CURRENT),
         "daily": {
             "time": [],
             "temperature_2m_max": [],
@@ -44,30 +62,89 @@ def get_fallback_weather(lat: float, lng: float) -> dict:
             "precipitation_sum": [],
         },
         "fallback": True,
+        "source": "fallback",
         "source_location": {"lat": lat, "lng": lng},
     }
 
 
-@circuit_breaker("open-meteo", max_failures=3, window_seconds=300, fallback=get_fallback_weather)
+async def get_location_aware_fallback(lat: float, lng: float) -> dict:
+    """Location-aware fallback weather when Open-Meteo is unavailable.
+
+    Uses NASA POWER's historical 7-day means for the exact (lat, lng) so the
+    PSI model still gets place-specific temperature/humidity/rain/wind instead
+    of a planet-wide constant. Falls back to get_fallback_weather() only if
+    NASA POWER also fails.
+    """
+    try:
+        from datetime import date
+
+        from app.services.environment_service import fetch_nasa_power_7d_protected
+
+        env = await fetch_nasa_power_7d_protected(lat, lng, date.today())
+        temp = env.get("temp_7d_mean")
+        humidity = env.get("humidity")
+        rain_7d = env.get("rainfall_7d")
+        wind = env.get("wind_speed")
+        if temp is None or humidity is None:
+            return get_fallback_weather(lat, lng)
+        return {
+            "current": {
+                "temperature_2m": temp,
+                "relative_humidity_2m": humidity,
+                "precipitation": round((rain_7d or 0) / 7, 2),
+                "wind_speed_10m": wind if wind is not None else _FALLBACK_CURRENT["wind_speed_10m"],
+            },
+            "daily": {
+                "time": [],
+                "temperature_2m_max": [],
+                "temperature_2m_min": [],
+                "precipitation_sum": [],
+            },
+            "fallback": True,
+            "source": "nasa_fallback",
+            "source_location": {"lat": lat, "lng": lng},
+        }
+    except Exception:
+        logger.warning("NASA POWER fallback failed for (%s,%s)", lat, lng, exc_info=True)
+        return get_fallback_weather(lat, lng)
+
+
+@circuit_breaker("open-meteo", max_failures=3, window_seconds=300, fallback=get_location_aware_fallback)
 async def fetch_weather_protected(lat: float, lng: float) -> dict:
     """Fetch weather with circuit breaker protection."""
     return await fetch_weather(lat, lng)
 
 
-def get_cached_weather(farm_id: str, db: Session) -> WeatherCache | None:
+def get_cached_weather(
+    farm_id: str,
+    db: Session,
+    lat: float | None = None,
+    lng: float | None = None,
+) -> WeatherCache | None:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
-    return (
-        db.query(WeatherCache)
-        .filter(
-            WeatherCache.farm_id == farm_id,
-            WeatherCache.timestamp > cutoff,
+    query = db.query(WeatherCache).filter(
+        WeatherCache.farm_id == farm_id,
+        WeatherCache.timestamp > cutoff,
+    )
+    if lat is not None and lng is not None:
+        query = query.filter(
+            WeatherCache.latitude.isnot(None),
+            func.abs(WeatherCache.latitude - lat) < _COORD_TOLERANCE,
+            func.abs(WeatherCache.longitude - lng) < _COORD_TOLERANCE,
         )
-        .order_by(WeatherCache.timestamp.desc())
+    return (
+        query.order_by(WeatherCache.timestamp.desc())
         .first()
     )
 
 
-def cache_weather(farm_id: str, data: dict, db: Session) -> WeatherCache:
+def cache_weather(
+    farm_id: str,
+    data: dict,
+    db: Session,
+    lat: float | None = None,
+    lng: float | None = None,
+) -> WeatherCache:
     current = data.get("current", {})
     record = WeatherCache(
         farm_id=farm_id,
@@ -75,6 +152,8 @@ def cache_weather(farm_id: str, data: dict, db: Session) -> WeatherCache:
         humidity=current.get("relative_humidity_2m", 0),
         rainfall=current.get("precipitation", 0),
         wind_speed=current.get("wind_speed_10m", 0),
+        latitude=lat,
+        longitude=lng,
         payload=data,
     )
     db.add(record)
@@ -101,16 +180,24 @@ def _has_daily_forecast(data: dict | None) -> bool:
     return bool(data and data.get("daily", {}).get("time"))
 
 
-def get_latest_forecast_row(farm_id: str, db: Session) -> WeatherCache | None:
+def get_latest_forecast_row(
+    farm_id: str,
+    db: Session,
+    lat: float | None = None,
+    lng: float | None = None,
+) -> WeatherCache | None:
     """Most recent DB row that still carries a real daily forecast, regardless
     of age. Used as a stale fallback so an outage never returns an empty array
-    when real forecast data was captured at some point."""
-    rows = (
-        db.query(WeatherCache)
-        .filter(WeatherCache.farm_id == farm_id)
-        .order_by(WeatherCache.timestamp.desc())
-        .all()
-    )
+    when real forecast data was captured at some point. Filtered to the farm's
+    current coordinates so moving a farm never serves another place's weather."""
+    query = db.query(WeatherCache).filter(WeatherCache.farm_id == farm_id)
+    if lat is not None and lng is not None:
+        query = query.filter(
+            WeatherCache.latitude.isnot(None),
+            func.abs(WeatherCache.latitude - lat) < _COORD_TOLERANCE,
+            func.abs(WeatherCache.longitude - lng) < _COORD_TOLERANCE,
+        )
+    rows = query.order_by(WeatherCache.timestamp.desc()).all()
     for row in rows:
         if _has_daily_forecast(row.payload):
             return row
@@ -128,7 +215,9 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
 
     # DB cache check -- only full-payload rows preserve the daily forecast.
     # Legacy rows (no payload, or empty daily) fall through to a live fetch.
-    db_weather = get_cached_weather(farm_id, db)
+    # Rows are matched to the farm's current coordinates so a relocated farm
+    # never reuses weather captured for its previous location.
+    db_weather = get_cached_weather(farm_id, db, lat, lng)
     if db_weather and _has_daily_forecast(db_weather.payload):
         result = {
             **db_weather.payload,
@@ -156,14 +245,15 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
     if live_weather is not None:
         live_weather["source"] = "live"
         try:
-            cache_weather(farm_id, live_weather, db)
+            cache_weather(farm_id, live_weather, db, lat, lng)
         except Exception:
             logger.warning("[weather] failed to persist live weather to DB", exc_info=True)
         cache_set(cache_key, live_weather, ttl=300, group="weather")
         return live_weather
 
-    # Failure path -- stale real data beats an empty forecast
-    stale = get_latest_forecast_row(farm_id, db)
+    # Failure path -- stale real data for THIS farm's current coordinates
+    # beats an empty forecast.
+    stale = get_latest_forecast_row(farm_id, db, lat, lng)
     if stale:
         result = {
             **stale.payload,
@@ -172,8 +262,8 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
         cache_set(cache_key, result, ttl=300, group="weather")
         return result
 
-    # Last resort: a legacy current-only DB row (no forecast), else the
-    # generic fallback.
+    # Last resort: a legacy current-only DB row (no forecast), else a
+    # location-aware fallback derived from NASA POWER for these coordinates.
     if db_weather and not db_weather.payload:
         result = {
             "current": {
@@ -193,6 +283,6 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
         }
         cache_set(cache_key, result, ttl=300, group="weather")
         return result
-    fallback = get_fallback_weather(lat, lng)
-    fallback["source"] = "fallback"
+    fallback = await get_location_aware_fallback(lat, lng)
+    cache_set(cache_key, fallback, ttl=300, group="weather")
     return fallback

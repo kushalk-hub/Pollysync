@@ -14,7 +14,7 @@ from app.services.weather_service import (
     get_cached_weather,
     parse_forecast,
     cache_weather,
-    get_fallback_weather,
+    get_location_aware_fallback,
 )
 
 router = APIRouter(prefix="/weather", tags=["weather"])
@@ -34,7 +34,7 @@ async def current_weather(
     current_user: User = Depends(get_current_user),
 ) -> WeatherCurrent:
     farm = _owned_farm_or_404(farm_id, current_user.id, db)
-    cached = get_cached_weather(farm_id, db)
+    cached = get_cached_weather(farm_id, db, farm.location_lat, farm.location_lng)
     if cached:
         return WeatherCurrent(
             temperature=cached.temperature,
@@ -42,18 +42,33 @@ async def current_weather(
             rainfall=cached.rainfall,
             wind_speed=cached.wind_speed,
             timestamp=cached.timestamp.isoformat() if cached.timestamp else None,
+            source="db_cache",
         )
     try:
         raw = await fetch_weather(farm.location_lat, farm.location_lng)
     except Exception:
-        raw = get_fallback_weather(farm.location_lat, farm.location_lng)
-    record = cache_weather(farm_id, raw, db)
+        raw = await get_location_aware_fallback(farm.location_lat, farm.location_lng)
+
+    current = raw.get("current", {})
+    if raw.get("fallback"):
+        return WeatherCurrent(
+            temperature=current.get("temperature_2m", 0),
+            humidity=current.get("relative_humidity_2m", 0),
+            rainfall=current.get("precipitation", 0),
+            wind_speed=current.get("wind_speed_10m", 0),
+            timestamp=None,
+            source=raw.get("source", "fallback"),
+        )
+    record = cache_weather(
+        farm_id, raw, db, farm.location_lat, farm.location_lng
+    )
     return WeatherCurrent(
         temperature=record.temperature,
         humidity=record.humidity,
         rainfall=record.rainfall,
         wind_speed=record.wind_speed,
         timestamp=record.timestamp.isoformat() if record.timestamp else None,
+        source="live",
     )
 
 
@@ -65,10 +80,9 @@ async def forecast(
     current_user: User = Depends(get_current_user),
 ) -> WeatherForecast:
     farm = _owned_farm_or_404(farm_id, current_user.id, db)
-    print(f"[DEBUG] forecast route: farm={farm_id} user={current_user.id} days={days}")
-    print(f"[DEBUG] forecast route: farm coords=({farm.location_lat}, {farm.location_lng})")
     raw = await get_weather_with_cache(farm_id, farm.location_lat, farm.location_lng, db)
-    print(f"[DEBUG] forecast route: raw source={raw.get('source')} has_daily={bool(raw.get('daily', {}).get('time'))}")
     forecast_data = parse_forecast(raw)[:days]
-    print(f"[DEBUG] forecast route: parsed {len(forecast_data)} days")
-    return WeatherForecast(forecast=[ForecastDay(**d) for d in forecast_data])
+    return WeatherForecast(
+        forecast=[ForecastDay(**d) for d in forecast_data],
+        source=raw.get("source"),
+    )
