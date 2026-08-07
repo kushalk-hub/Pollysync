@@ -114,7 +114,7 @@ async def get_bee_data_with_cache(farm_id: str, lat: float, lng: float, db: Sess
             "richness": len(db_species),
             "source": "db_cache",
         }
-        cache_set(cache_key, result, ttl=900, group="bees")
+        cache_set(cache_key, result, ttl=300, group="bees")
         return result
     
     # Live fetch
@@ -127,7 +127,7 @@ async def get_bee_data_with_cache(farm_id: str, lat: float, lng: float, db: Sess
             "occurrences": occurrences[:10],  # Limit for cache size
             "source": "live",
         }
-        cache_set(cache_key, result, ttl=900, group="bees")
+        cache_set(cache_key, result, ttl=300, group="bees")
         return result
     except Exception:
         # Fallback to mock data

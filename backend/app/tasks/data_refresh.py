@@ -91,7 +91,7 @@ def refresh_ndvi_batch():
             if ndvi is None:
                 continue
             cache_key = f"ndvi,{f.location_lat},{f.location_lng},{date.today()}"
-            cache_set(cache_key, ndvi, ttl=900, group="ndvi")
+            cache_set(cache_key, ndvi, ttl=300, group="ndvi")
     finally:
         db.close()
 
@@ -137,7 +137,7 @@ def refresh_bees_batch():
                 "source": "refresh",
             }
             cache_key = f"{f.location_lat},{f.location_lng}"
-            cache_set(cache_key, result, ttl=900, group="bees")
+            cache_set(cache_key, result, ttl=300, group="bees")
     finally:
         db.close()
 

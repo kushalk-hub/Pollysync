@@ -55,7 +55,7 @@ async def fetch_weather_protected(lat: float, lng: float) -> dict:
 
 
 def get_cached_weather(farm_id: str, db: Session) -> WeatherCache | None:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
     return (
         db.query(WeatherCache)
         .filter(
@@ -134,7 +134,7 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
             **db_weather.payload,
             "source": "db_cache",
         }
-        cache_set(cache_key, result, ttl=900, group="weather")
+        cache_set(cache_key, result, ttl=300, group="weather")
         return result
 
     # Live fetch (circuit-breaker protected so repeated failures short-circuit)
@@ -159,7 +159,7 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
             cache_weather(farm_id, live_weather, db)
         except Exception:
             logger.warning("[weather] failed to persist live weather to DB", exc_info=True)
-        cache_set(cache_key, live_weather, ttl=900, group="weather")
+        cache_set(cache_key, live_weather, ttl=300, group="weather")
         return live_weather
 
     # Failure path -- stale real data beats an empty forecast
@@ -169,7 +169,7 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
             **stale.payload,
             "source": "db_cache_stale",
         }
-        cache_set(cache_key, result, ttl=900, group="weather")
+        cache_set(cache_key, result, ttl=300, group="weather")
         return result
 
     # Last resort: a legacy current-only DB row (no forecast), else the
@@ -191,7 +191,7 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
             "source": "db_cache",
             "fallback": True,
         }
-        cache_set(cache_key, result, ttl=900, group="weather")
+        cache_set(cache_key, result, ttl=300, group="weather")
         return result
     fallback = get_fallback_weather(lat, lng)
     fallback["source"] = "fallback"

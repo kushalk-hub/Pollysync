@@ -296,7 +296,7 @@ async def get_environment_features(
     # (None) NDVI would poison the entry for its whole TTL and force the
     # caller's 0.65-style fallback even after Earth Engine recovers.
     if result["ndvi"] is not None:
-        cache_set(cache_key, result, ttl=900, group="environment")
+        cache_set(cache_key, result, ttl=300, group="environment")
 
     return result
 
@@ -315,7 +315,7 @@ async def get_ndvi_with_cache(lat: float, lon: float, as_of: Optional[date] = No
     try:
         ndvi = await fetch_ndvi(lat, lon, as_of)
         if ndvi is not None:
-            cache_set(cache_key, ndvi, ttl=900, group="ndvi")
+            cache_set(cache_key, ndvi, ttl=300, group="ndvi")
         return ndvi
     except Exception:
         return None
@@ -333,7 +333,7 @@ async def get_bee_richness_with_cache(lat: float, lon: float, radius_km: float =
     # Live fetch
     try:
         richness = await fetch_bee_richness(lat, lon, radius_km)
-        cache_set(cache_key, richness, ttl=900, group="bee_richness")
+        cache_set(cache_key, richness, ttl=300, group="bee_richness")
         return richness
     except Exception:
         return 0
