@@ -14,11 +14,11 @@ class NotificationPreference(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True, unique=True)
     push_critical: Mapped[bool] = mapped_column(Boolean, default=True)
     push_daily: Mapped[bool] = mapped_column(Boolean, default=True)
-    push_system: Mapped[bool] = mapped_column(Boolean, default=False)
-    email_weekly: Mapped[bool] = mapped_column(Boolean, default=True)
-    email_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    push_system: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_weekly: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_billing: Mapped[bool] = mapped_column(Boolean, default=False)
     whatsapp_urgent: Mapped[bool] = mapped_column(Boolean, default=False)
-    sms_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    sms_alerts: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -13,6 +13,7 @@ Requirements:
 
 import os
 import sys
+import json
 import uuid
 import sqlite3
 from datetime import datetime
@@ -50,6 +51,23 @@ def generate_uuid() -> str:
     return str(uuid.uuid4())
 
 
+def parse_json(value, default):
+    """Parse a JSON column value that may be a str (SQLite) into a Python object
+    so it can be stored in a Supabase JSONB column."""
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        if not value:
+            return default
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
 def migrate_users(sqlite_conn: sqlite3.Connection, supabase: Client) -> dict:
     """Migrate users and return mapping of old_id -> new_uuid"""
     print("Migrating users...")
@@ -74,8 +92,11 @@ def migrate_users(sqlite_conn: sqlite3.Connection, supabase: Client) -> dict:
             "oauth_provider": row["oauth_provider"],
             "oauth_subject": row["oauth_subject"],
             "is_active": bool(row["is_active"]),
-            "has_onboarded": False,
+            "has_onboarded": bool(row["has_onboarded"]),
+            "failed_login_attempts": row["failed_login_attempts"] or 0,
+            "lockout_until": row["lockout_until"],
             "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
         }).execute()
         
         id_mapping[old_id] = new_uuid
@@ -170,6 +191,11 @@ def migrate_predictions(sqlite_conn: sqlite3.Connection, supabase: Client, farm_
             print(f"  WARNING: Farm {row['farm_id']} not found for prediction {row['id']}, skipping")
             continue
         
+        try:
+            prediction_inputs = row["prediction_inputs"]
+        except IndexError:
+            prediction_inputs = "{}"
+        
         supabase.table("predictions").insert({
             "id": new_uuid,
             "farm_id": new_farm_id,
@@ -178,14 +204,14 @@ def migrate_predictions(sqlite_conn: sqlite3.Connection, supabase: Client, farm_
             "flowering_confidence": row["flowering_confidence"],
             "psi_score": row["psi_score"],
             "risk_level": row["risk_level"],
-            "weather_summary": row["weather_summary"],
-            "pollen_summary": row["pollen_summary"],
+            "weather_summary": parse_json(row["weather_summary"], {}),
+            "pollen_summary": parse_json(row["pollen_summary"], {}),
             "ndvi_value": row["ndvi_value"],
-            "bee_species": row["bee_species"],
+            "bee_species": parse_json(row["bee_species"], []),
             "recommendation": row["recommendation"],
             "model_source": row["model_source"],
             "data_confidence": row["data_confidence"],
-            "prediction_inputs": "{}",
+            "prediction_inputs": parse_json(prediction_inputs, {}),
             "created_at": row["created_at"],
         }).execute()
         
@@ -312,6 +338,110 @@ def migrate_refresh_tokens(sqlite_conn: sqlite3.Connection, supabase: Client, us
     print(f"Migrated {count} refresh tokens")
 
 
+def migrate_team_members(sqlite_conn: sqlite3.Connection, supabase: Client, user_id_mapping: dict, farm_id_mapping: dict):
+    """Migrate team members"""
+    print("Migrating team members...")
+    cursor = sqlite_conn.execute("SELECT * FROM team_members")
+    rows = cursor.fetchall()
+    
+    count = 0
+    for row in rows:
+        new_uuid = generate_uuid()
+        
+        new_farm_id = farm_id_mapping.get(row["farm_id"])
+        new_invited_by = user_id_mapping.get(row["invited_by"]) if row["invited_by"] else None
+        
+        if not new_farm_id:
+            print(f"  WARNING: Farm {row['farm_id']} not found for team member {row['id']}, skipping")
+            continue
+        
+        supabase.table("team_members").insert({
+            "id": new_uuid,
+            "farm_id": new_farm_id,
+            "email": row["email"],
+            "name": row["name"],
+            "role": row["role"],
+            "status": row["status"],
+            "invited_by": new_invited_by,
+            "created_at": row["created_at"],
+        }).execute()
+        
+        count += 1
+        print(f"  Migrated team member: {row['id']} -> {new_uuid}")
+    
+    print(f"Migrated {count} team members")
+
+
+def migrate_notification_preferences(sqlite_conn: sqlite3.Connection, supabase: Client, user_id_mapping: dict):
+    """Migrate notification preferences"""
+    print("Migrating notification preferences...")
+    cursor = sqlite_conn.execute("SELECT * FROM notification_preferences")
+    rows = cursor.fetchall()
+    
+    count = 0
+    for row in rows:
+        new_uuid = generate_uuid()
+        
+        new_user_id = user_id_mapping.get(row["user_id"])
+        if not new_user_id:
+            print(f"  WARNING: User {row['user_id']} not found for notification preferences, skipping")
+            continue
+        
+        supabase.table("notification_preferences").insert({
+            "id": new_uuid,
+            "user_id": new_user_id,
+            "push_critical": bool(row["push_critical"]),
+            "push_daily": bool(row["push_daily"]),
+            "push_system": bool(row["push_system"]),
+            "email_weekly": bool(row["email_weekly"]),
+            "email_billing": bool(row["email_billing"]),
+            "whatsapp_urgent": bool(row["whatsapp_urgent"]),
+            "sms_alerts": bool(row["sms_alerts"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }).execute()
+        
+        count += 1
+    
+    print(f"Migrated {count} notification preferences")
+
+
+def migrate_revoked_tokens(sqlite_conn: sqlite3.Connection, supabase: Client):
+    """Migrate revoked tokens"""
+    print("Migrating revoked tokens...")
+    cursor = sqlite_conn.execute("SELECT * FROM revoked_tokens")
+    rows = cursor.fetchall()
+    
+    count = 0
+    for row in rows:
+        supabase.table("revoked_tokens").insert({
+            "jti": row["jti"],
+            "expires_at": row["expires_at"],
+        }).execute()
+        
+        count += 1
+    
+    print(f"Migrated {count} revoked tokens")
+
+
+def migrate_agent_rate_limits(sqlite_conn: sqlite3.Connection, supabase: Client):
+    """Migrate agent rate limits"""
+    print("Migrating agent rate limits...")
+    cursor = sqlite_conn.execute("SELECT * FROM agent_rate_limits")
+    rows = cursor.fetchall()
+    
+    count = 0
+    for row in rows:
+        supabase.table("agent_rate_limits").insert({
+            "identifier": row["identifier"],
+            "timestamp": row["timestamp"],
+        }).execute()
+        
+        count += 1
+    
+    print(f"Migrated {count} agent rate limits")
+
+
 def main():
     print("=" * 60)
     print("PolliSync Data Migration: SQLite -> Supabase PostgreSQL")
@@ -350,6 +480,10 @@ def main():
         migrate_bee_occurrences(sqlite_conn, supabase, farm_id_mapping)
         migrate_notifications(sqlite_conn, supabase, user_id_mapping, farm_id_mapping)
         migrate_refresh_tokens(sqlite_conn, supabase, user_id_mapping)
+        migrate_team_members(sqlite_conn, supabase, user_id_mapping, farm_id_mapping)
+        migrate_notification_preferences(sqlite_conn, supabase, user_id_mapping)
+        migrate_revoked_tokens(sqlite_conn, supabase)
+        migrate_agent_rate_limits(sqlite_conn, supabase)
         
         print("\n" + "=" * 60)
         print("Migration completed successfully!")

@@ -150,11 +150,11 @@ def seed_districts_if_needed() -> None:
             District(slug="gadchiroli", name="Gadchiroli", state="Maharashtra", centroid_lat=20.1809, centroid_lng=80.0883, radius_km=5.0),
             District(slug="gondia", name="Gondia", state="Maharashtra", centroid_lat=21.4602, centroid_lng=80.1883, radius_km=5.0),
             District(slug="hingoli", name="Hingoli", state="Maharashtra", centroid_lat=19.7150, centroid_lng=77.1310, radius_km=5.0),
-            District(slug="nanded", name="Nanded", state="Maharashtra", centroid_lat=19.1388, centroid_lng=77.3218, radius_km=5.0),
+            District(slug="joshipura", name="Joshipura", state="Maharashtra", centroid_lat=16.9243, centroid_lng=74.8433, radius_km=5.0),
             District(slug="parbhani", name="Parbhani", state="Maharashtra", centroid_lat=19.2686, centroid_lng=76.7708, radius_km=5.0),
             District(slug="wardha", name="Wardha", state="Maharashtra", centroid_lat=20.7453, centroid_lng=78.6023, radius_km=5.0),
             District(slug="washim", name="Washim", state="Maharashtra", centroid_lat=20.1117, centroid_lng=77.1330, radius_km=5.0),
-            District(slug="yavatmal", name="Yavatmal", state="Maharashtra", centroid_lat=20.3897, centroid_lng=78.1308, radius_km=5.0),
+            District(slug="yeotmal", name="Yavatmal", state="Maharashtra", centroid_lat=20.3897, centroid_lng=78.1308, radius_km=5.0),
         ]
         
         session.add_all(districts)

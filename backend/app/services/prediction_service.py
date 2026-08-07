@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -402,15 +401,15 @@ async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Predi
         flowering_confidence=confidence,
         psi_score=psi,
         risk_level=risk,
-        weather_summary=json.dumps(weather),
-        pollen_summary=json.dumps({"tree": features["pollen_tree"],
-                                    "grass": features["pollen_grass"],
-                                    "weed": features["pollen_weed"]}),
+        weather_summary=weather,
+        pollen_summary={"tree": features["pollen_tree"],
+                        "grass": features["pollen_grass"],
+                        "weed": features["pollen_weed"]},
         ndvi_value=features["ndvi"],
-        bee_species=json.dumps(bee_species),
+        bee_species=bee_species,
         model_source=model_source,
         data_confidence=data_confidence,
-        prediction_inputs=json.dumps({
+        prediction_inputs={
             "farm_settings": {
                 "crop_type": farm.crop_type,
                 "planting_date": farm.planting_date,
@@ -431,7 +430,7 @@ async def run_prediction(farm: Farm, db: Session, region: str = "auto") -> Predi
                     "psi_adjustment": penalties["water_availability"],
                 },
             },
-        }),
+        },
     )
     db.add(prediction)
     db.commit()

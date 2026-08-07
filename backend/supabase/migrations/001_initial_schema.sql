@@ -57,6 +57,11 @@ CREATE TABLE users (
   language TEXT DEFAULT 'en',
   is_active BOOLEAN DEFAULT true,
   has_onboarded BOOLEAN DEFAULT false,
+  hashed_password TEXT,
+  oauth_provider TEXT,
+  oauth_subject TEXT,
+  failed_login_attempts INTEGER DEFAULT 0 NOT NULL,
+  lockout_until TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -206,6 +211,29 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 
 -- =====================================================
+-- 11. REVOKED TOKENS TABLE (JWT access-token blacklist)
+-- =====================================================
+CREATE TABLE revoked_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  jti TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_revoked_tokens_jti ON revoked_tokens(jti);
+
+-- =====================================================
+-- 12. AGENT RATE LIMITS TABLE
+-- =====================================================
+CREATE TABLE agent_rate_limits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  identifier TEXT NOT NULL,
+  timestamp DOUBLE PRECISION NOT NULL
+);
+
+CREATE INDEX idx_agent_rate_limits_identifier ON agent_rate_limits(identifier);
+CREATE INDEX idx_agent_rate_limits_timestamp ON agent_rate_limits(timestamp);
+
+-- =====================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- =====================================================
 
@@ -219,6 +247,8 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE revoked_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_rate_limits ENABLE ROW LEVEL SECURITY;
 
 -- Users can read/update their own data
 CREATE POLICY users_self_policy ON users
@@ -263,6 +293,9 @@ CREATE POLICY notification_preferences_user_policy ON notification_preferences
 -- Refresh tokens: users can only access their own tokens
 CREATE POLICY refresh_tokens_user_policy ON refresh_tokens
   FOR ALL USING (user_id = auth.uid());
+
+-- Revoked tokens: no user-facing policy (server-side blacklist managed with the service role)
+-- Agent rate limits: no user-facing policy (server-side counters managed with the service role)
 
 -- Districts: public read access (no RLS needed for districts)
 -- Districts are reference data, everyone can read them

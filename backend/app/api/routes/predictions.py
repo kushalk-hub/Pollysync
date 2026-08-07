@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.farm import Farm
-from app.models.prediction import Prediction
+from app.models.prediction import Prediction, load_json
 from app.models.user import User
 from app.schemas.prediction import DashboardSummary, PredictionCreate, PredictionRead
 from app.services.prediction_service import run_prediction
@@ -110,10 +108,7 @@ def _normalise_setting(value):
 
 
 def _is_prediction_stale(prediction: Prediction, farm: Farm) -> bool:
-    try:
-        snapshot = json.loads(prediction.prediction_inputs or "{}").get("farm_settings")
-    except (TypeError, ValueError):
-        return False
+    snapshot = load_json(prediction.prediction_inputs, {}).get("farm_settings")
     if not snapshot:
         return False
     for field in ("crop_type", "planting_date", "harvest_date", "location_name", "location_lat", "location_lng",
@@ -132,15 +127,15 @@ def _prediction_to_read(p: Prediction, farm: Farm | None = None) -> PredictionRe
         flowering_confidence=p.flowering_confidence,
         psi_score=p.psi_score,
         risk_level=p.risk_level,
-        weather_summary=json.loads(p.weather_summary) if p.weather_summary else {},
-        pollen_summary=json.loads(p.pollen_summary) if p.pollen_summary else {},
+        weather_summary=load_json(p.weather_summary, {}),
+        pollen_summary=load_json(p.pollen_summary, {}),
         ndvi_value=p.ndvi_value,
-        bee_species=json.loads(p.bee_species) if p.bee_species else [],
+        bee_species=load_json(p.bee_species, []),
         recommendation=p.recommendation,
         created_at=p.created_at,
         model_source=p.model_source,
         data_confidence=p.data_confidence,
-        prediction_inputs=json.loads(p.prediction_inputs) if p.prediction_inputs else {},
+        prediction_inputs=load_json(p.prediction_inputs, {}),
         is_stale=_is_prediction_stale(p, farm) if farm else False,
     )
 

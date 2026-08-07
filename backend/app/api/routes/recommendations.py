@@ -1,5 +1,3 @@
-import json
-
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -10,7 +8,7 @@ from app.auth import get_current_user
 from app.core.config import settings
 from app.database import get_db
 from app.models.farm import Farm
-from app.models.prediction import Prediction
+from app.models.prediction import Prediction, load_json
 from app.models.user import User
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
@@ -22,18 +20,12 @@ class GenerateRequest(BaseModel):
 
 
 def _weather(prediction: Prediction) -> dict:
-    try:
-        return json.loads(prediction.weather_summary or "{}")
-    except (TypeError, ValueError):
-        return {}
+    return load_json(prediction.weather_summary, {})
 
 
 def _build_prompt(farm: Farm, prediction: Prediction) -> str:
     weather = _weather(prediction)
-    try:
-        bee_species = json.loads(prediction.bee_species or "[]")
-    except (TypeError, ValueError):
-        bee_species = []
+    bee_species = load_json(prediction.bee_species, [])
 
     return f"""You are an expert agronomist advising an Indian farmer. Use only the supplied facts; never invent pests, rainfall, or crop stages.
 

@@ -14,7 +14,7 @@ class User(Base):
     firebase_uid: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    full_name: Mapped[str] = mapped_column(String(120))
+    full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True, default=None)
     role: Mapped[str | None] = mapped_column(String(80), nullable=True, default=None)
     organization: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
