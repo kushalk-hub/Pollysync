@@ -65,6 +65,10 @@ async def forecast(
     current_user: User = Depends(get_current_user),
 ) -> WeatherForecast:
     farm = _owned_farm_or_404(farm_id, current_user.id, db)
+    print(f"[DEBUG] forecast route: farm={farm_id} user={current_user.id} days={days}")
+    print(f"[DEBUG] forecast route: farm coords=({farm.location_lat}, {farm.location_lng})")
     raw = await get_weather_with_cache(farm_id, farm.location_lat, farm.location_lng, db)
+    print(f"[DEBUG] forecast route: raw source={raw.get('source')} has_daily={bool(raw.get('daily', {}).get('time'))}")
     forecast_data = parse_forecast(raw)[:days]
+    print(f"[DEBUG] forecast route: parsed {len(forecast_data)} days")
     return WeatherForecast(forecast=[ForecastDay(**d) for d in forecast_data])
