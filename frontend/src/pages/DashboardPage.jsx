@@ -78,12 +78,6 @@ export default function DashboardPage() {
           <h1 className="mt-1 font-display text-display text-on-surface">Good {new Date().getHours() < 12 ? "morning" : "day"}, {farm.name || "farmer"}</h1>
           <p className="mt-1 text-body-sm text-on-surface-variant">Updated from your latest prediction</p>
         </div>
-        <div className="flex flex-col gap-sm sm:flex-row sm:items-center">
-          <button onClick={() => navigate(`/predict?farm_id=${farmId}`)} className="min-h-11 inline-flex items-center justify-center gap-sm rounded-lg bg-primary px-lg text-label-md font-bold text-on-primary shadow-sm hover:brightness-95">
-            <span className="material-symbols-outlined">auto_awesome</span>
-            Run prediction
-          </button>
-        </div>
       </header>
 
       <section className="grid grid-cols-1 gap-lg lg:grid-cols-12">
