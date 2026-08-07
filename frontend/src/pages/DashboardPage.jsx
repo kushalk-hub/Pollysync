@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [trendTab, setTrendTab] = useState("forecast");
+  const [trendTab, setTrendTab] = useState("history");
   const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
@@ -134,20 +134,29 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-lg lg:grid-cols-2">
-        <FloweringCalendar start={prediction.flowering_start} end={prediction.flowering_end} confidence={prediction.flowering_confidence} />
-        <PollenBar pollen={prediction.pollen_summary} />
-        <NDVICard value={prediction.ndvi_value} onViewTrend={() => setTrendTab("ndvi")} />
+      <section className="grid grid-cols-1 gap-lg md:grid-cols-2 xl:grid-cols-4">
+        <div className="xl:col-span-2">
+          <NDVICard value={prediction.ndvi_value} onViewTrend={() => setTrendTab("ndvi")} />
+        </div>
+        <div className="xl:col-span-2">
+          <WeatherTrendChart farmId={farmId} />
+        </div>
+        <div className="md:col-span-2 xl:col-span-4">
+          <div className="grid grid-cols-1 gap-lg md:grid-cols-2">
+            <FloweringCalendar start={prediction.flowering_start} end={prediction.flowering_end} confidence={prediction.flowering_confidence} />
+            <PollenBar pollen={prediction.pollen_summary} />
+          </div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-outline-variant bg-surface p-lg shadow-sm">
         <div className="flex flex-col gap-md sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-headline-md font-headline-md text-on-surface">Trends</h2>
-            <p className="text-body-sm text-on-surface-variant">{trendTab === "forecast" ? "Seven-day temperature forecast" : trendTab === "ndvi" ? "Crop-health movement over prediction history" : "How your PSI has changed over time"}</p>
+            <p className="text-body-sm text-on-surface-variant">{trendTab === "ndvi" ? "Crop-health movement over prediction history" : "How your PSI has changed over time"}</p>
           </div>
           <div role="tablist" aria-label="Trend views" className="inline-flex w-fit rounded-lg bg-surface-container p-1">
-            {[["forecast", "Forecast"], ["history", "PSI"], ["ndvi", "NDVI"]].map(([id, label]) => (
+            {[ ["history", "PSI"], ["ndvi", "NDVI"] ].map(([id, label]) => (
               <button key={id} role="tab" aria-selected={trendTab === id} onClick={() => setTrendTab(id)} className={`min-h-11 rounded-md px-md text-label-sm ${trendTab === id ? "bg-surface text-primary shadow-sm font-bold" : "text-on-surface-variant"}`}>
                 {label}
               </button>
@@ -155,7 +164,7 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="mt-lg">
-          {trendTab === "forecast" ? <WeatherTrendChart farmId={farmId} /> : trendTab === "ndvi" ? <NDVITrendChart farmId={farmId} /> : <PSIHistoryChart farmId={farmId} />}
+          {trendTab === "ndvi" ? <NDVITrendChart farmId={farmId} /> : <PSIHistoryChart farmId={farmId} />}
         </div>
       </section>
 
