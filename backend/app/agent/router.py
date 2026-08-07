@@ -192,7 +192,7 @@ async def chat(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _check_rate_limit(current_user.id, db)
+    _check_rate_limit(str(current_user.id), db)
 
     farm_data: dict[str, Any] | None = payload.get("farm_data")
     farm_id: str | None = payload.get("farm_id")
@@ -254,7 +254,7 @@ async def search_knowledge(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _check_rate_limit(current_user.id, db)
+    _check_rate_limit(str(current_user.id), db)
 
     query = payload.get("query", "")
     if not query:
@@ -277,6 +277,6 @@ async def get_agent_context(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Debug endpoint to see assembled agent context."""
-    _check_rate_limit(current_user.id, db)
+    _check_rate_limit(str(current_user.id), db)
     context = await assemble_farm_context(farm_id, db)
     return {"context": context}
