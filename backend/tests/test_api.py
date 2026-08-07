@@ -227,6 +227,64 @@ def test_csrf_cookie_protection() -> None:
         assert res_good_header.status_code == 201
 
 
+def test_csrf_skipped_for_allowed_origin(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+    import app.auth as auth_module
+
+    real = auth_module.settings
+    monkeypatch.setattr(
+        auth_module,
+        "settings",
+        SimpleNamespace(
+            allowed_origins=["https://front.test"],
+            is_production=real.is_production,
+            access_token_minutes=real.access_token_minutes,
+            refresh_token_days=real.refresh_token_days,
+            secret_key=real.secret_key,
+            algorithm=real.algorithm,
+        ),
+    )
+
+    email = f"origin-{uuid.uuid4()}@example.com"
+    password = "StrongPass1!"
+    farm_payload = {
+        "name": "Origin Farm",
+        "crop": "Cotton",
+        "location": "Amravati, Maharashtra",
+        "area_acres": 10.0,
+        "soil_type": "black",
+    }
+
+    with TestClient(app) as client:
+        reg = client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password, "full_name": "Origin User"},
+        )
+        assert reg.status_code == 201
+        login = client.post("/api/auth/login", json={"email": email, "password": password})
+        assert login.status_code == 200
+        assert "access_token" in client.cookies
+        assert "XSRF-TOKEN" in client.cookies
+
+        # Allowed Origin without X-XSRF-TOKEN header -> trusted, should succeed
+        res_allowed = client.post(
+            "/api/farms",
+            json=farm_payload,
+            headers={"Origin": "https://front.test"},
+        )
+        assert res_allowed.status_code == 201
+
+        # Disallowed Origin without X-XSRF-TOKEN header -> blocked
+        res_evil = client.post(
+            "/api/farms",
+            json=farm_payload,
+            headers={"Origin": "https://evil.test"},
+        )
+        assert res_evil.status_code == 403
+        assert "CSRF" in res_evil.json()["detail"]
+
+
 def test_account_lockout() -> None:
     import uuid
     email = f"lockout-{uuid.uuid4()}@example.com"

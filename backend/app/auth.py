@@ -186,15 +186,23 @@ def get_current_user(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # Double-submit cookie CSRF check
+    # Double-submit cookie CSRF check.
+    # A request carrying an Origin header that is in allowed_origins is trusted
+    # (browsers set Origin and scripts cannot forge it), so the XSRF header is
+    # not required. This is what makes cookie auth work across the separate
+    # frontend/backend origins in production. Requests without an Origin or from
+    # a disallowed origin still require the double-submit XSRF header.
     if not token and cookie_token and request.method in {"POST", "PUT", "DELETE", "PATCH"}:
-        csrf_cookie = request.cookies.get("XSRF-TOKEN")
-        csrf_header = request.headers.get("X-XSRF-TOKEN") or request.headers.get("x-xsrf-token")
-        if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="CSRF token validation failed",
-            )
+        origin = request.headers.get("origin", "").strip().rstrip("/")
+        origin_trusted = bool(origin and origin in settings.allowed_origins)
+        if not origin_trusted:
+            csrf_cookie = request.cookies.get("XSRF-TOKEN")
+            csrf_header = request.headers.get("X-XSRF-TOKEN") or request.headers.get("x-xsrf-token")
+            if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="CSRF token validation failed",
+                )
             
     payload = decode_access_token(token_value)
     
