@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -65,7 +66,7 @@ class FarmUpdate(BaseModel):
 class FarmRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: UUID
     name: str
     crop_type: str
     crop: str

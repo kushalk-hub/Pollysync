@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,14 +17,14 @@ class NotificationPreferenceUpdate(BaseModel):
 class NotificationPreferenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     push_critical: bool = True
     push_daily: bool = True
-    push_system: bool = False
-    email_weekly: bool = True
-    email_billing: bool = True
+    push_system: bool = True
+    email_weekly: bool = False
+    email_billing: bool = False
     whatsapp_urgent: bool = False
-    sms_alerts: bool = True
+    sms_alerts: bool = False
     created_at: datetime
     updated_at: datetime

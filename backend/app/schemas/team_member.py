@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,11 +18,11 @@ class TeamMemberUpdate(BaseModel):
 class TeamMemberRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    farm_id: str
+    id: UUID
+    farm_id: UUID
     email: str
     name: str
     role: str
     status: str
-    invited_by: str
+    invited_by: UUID
     created_at: datetime

@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -41,14 +42,14 @@ class UserUpdate(BaseModel):
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: UUID
     email: str
-    full_name: str
+    full_name: str | None = None
     phone: str | None = None
     role: str | None = None
     organization: str | None = None
     language: str | None = "en"
-    has_onboarded: bool = False
+    has_onboarded: bool | None = False
     created_at: datetime
 
 

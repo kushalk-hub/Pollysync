@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -12,8 +13,8 @@ class PredictionCreate(BaseModel):
 class PredictionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    farm_id: str
+    id: UUID
+    farm_id: UUID
     flowering_start: str
     flowering_end: str
     flowering_confidence: float
