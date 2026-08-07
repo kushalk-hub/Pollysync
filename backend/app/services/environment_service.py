@@ -292,9 +292,12 @@ async def get_environment_features(
         "_t_min_7d": weather["t_min_7d"],
     }
     
-    # Cache the result
-    cache_set(cache_key, result, ttl=900, group="environment")
-    
+    # Cache the result -- but only if NDVI succeeded. Caching a failed
+    # (None) NDVI would poison the entry for its whole TTL and force the
+    # caller's 0.65-style fallback even after Earth Engine recovers.
+    if result["ndvi"] is not None:
+        cache_set(cache_key, result, ttl=900, group="environment")
+
     return result
 
 

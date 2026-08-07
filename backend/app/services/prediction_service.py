@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.farm import Farm
 from app.models.prediction import Prediction
 from app.services.bee_service import get_mock_bees
-from app.services.environment_service import get_environment_features
+from app.services.environment_service import get_environment_features, get_ndvi_with_cache
 from app.services.feature_engineering import build_features
 from app.services.weather_service import (
     cache_weather,
@@ -283,6 +283,21 @@ async def _get_live_or_fallback_features(farm: Farm, weather: dict, now: datetim
         env_features = {}
 
     live_ndvi = env_features.get("ndvi")
+
+    # If the environment snapshot had no NDVI (Earth Engine hiccup), retry a
+    # fresh live query before falling back to the hardcoded default.
+    if live_ndvi is None:
+        try:
+            retry = await get_ndvi_with_cache(
+                lat=farm.location_lat,
+                lon=farm.location_lng,
+                as_of=now.date(),
+            )
+            if retry is not None:
+                live_ndvi = retry
+        except Exception:
+            pass
+
     pollen_tree = env_features.get("pollen_tree")
     pollen_grass = env_features.get("pollen_grass")
     pollen_weed = env_features.get("pollen_weed")

@@ -91,26 +91,42 @@ def parse_forecast(raw: dict) -> list[dict]:
     ]
 
 
+def _has_daily_forecast(data: dict | None) -> bool:
+    """A cached weather entry only counts as valid if it carries daily data.
+    Entries cached by older code (or a fallback) may have empty `daily`."""
+    return bool(data and data.get("daily", {}).get("time"))
+
+
 async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Session) -> dict:
     """Get weather data with L1/L2 cache layer."""
     cache_key = f"{lat},{lng}"
-    
-    # L1/L2 cache check
+
+    # L1/L2 cache check -- ignore stale entries that lack the daily forecast
     cached = cache_get(cache_key, group="weather")
-    if cached:
+    if cached and _has_daily_forecast(cached):
         return cached
-    
-    # DB cache check
+
+    # DB cache check -- only full-payload rows preserve the daily forecast.
+    # Legacy rows (no payload, or empty daily) fall through to a live fetch.
     db_weather = get_cached_weather(farm_id, db)
-    if db_weather:
-        # Full payload preserves the daily forecast; legacy rows fall back to
-        # current-conditions-only reconstruction.
-        if db_weather.payload:
-            result = {
-                **db_weather.payload,
-                "source": "db_cache",
-            }
-        else:
+    if db_weather and _has_daily_forecast(db_weather.payload):
+        result = {
+            **db_weather.payload,
+            "source": "db_cache",
+        }
+        cache_set(cache_key, result, ttl=900, group="weather")
+        return result
+
+    # Live fetch
+    try:
+        live_weather = await fetch_weather(lat, lng)
+        live_weather["source"] = "live"
+        cache_set(cache_key, live_weather, ttl=900, group="weather")
+        return live_weather
+    except Exception:
+        # Last resort: a legacy current-only DB row (no forecast), else the
+        # generic fallback. Never lets a stale empty entry block a refetch.
+        if db_weather and not db_weather.payload:
             result = {
                 "current": {
                     "temperature_2m": db_weather.temperature,
@@ -125,18 +141,10 @@ async def get_weather_with_cache(farm_id: str, lat: float, lng: float, db: Sessi
                     "precipitation_sum": [],
                 },
                 "source": "db_cache",
+                "fallback": True,
             }
-        cache_set(cache_key, result, ttl=900, group="weather")
-        return result
-    
-    # Live fetch
-    try:
-        live_weather = await fetch_weather(lat, lng)
-        live_weather["source"] = "live"
-        cache_set(cache_key, live_weather, ttl=900, group="weather")
-        return live_weather
-    except Exception:
-        # Fallback on error
+            cache_set(cache_key, result, ttl=900, group="weather")
+            return result
         fallback = get_fallback_weather(lat, lng)
         fallback["source"] = "fallback"
         return fallback
